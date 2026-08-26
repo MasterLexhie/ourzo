@@ -1,0 +1,450 @@
+Project Ourzo {
+  database_type: "PostgreSQL"
+  Note: "Multi-tenant SaaS platform using shared-schema architecture with workspace-based tenant isolation."
+}
+
+
+//////////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////////
+
+Enum workspace_plan {
+  free
+  pro
+  business
+}
+
+Enum workspace_role {
+  owner
+  admin
+  member
+}
+
+Enum project_status {
+  planned
+  in_progress
+  paused
+  completed
+  archived
+}
+
+Enum task_status {
+  todo
+  in_progress
+  completed
+  cancelled
+}
+
+Enum task_priority {
+  low
+  medium
+  high
+  urgent
+}
+
+Enum usage_resource {
+  members
+  projects
+  tasks
+  api_keys
+}
+
+
+//////////////////////////////////////////////////////
+// USERS
+//////////////////////////////////////////////////////
+
+Table users {
+  id uuid [pk]
+
+  email varchar(320) [not null, unique]
+
+  password_hash varchar(255) [not null]
+
+  first_name varchar(100) [not null]
+
+  last_name varchar(100) [not null]
+
+  email_verified_at timestamptz
+
+  created_at timestamptz [not null]
+
+  updated_at timestamptz [not null]
+
+
+  Indexes {
+    email [unique]
+  }
+
+
+  Note: "Platform-level user account. Users gain tenant access through workspace membership."
+}
+
+
+//////////////////////////////////////////////////////
+// WORKSPACES
+//////////////////////////////////////////////////////
+
+Table workspaces {
+  id uuid [pk]
+
+  name varchar(150) [not null]
+
+  slug varchar(150) [not null, unique]
+
+  plan workspace_plan [not null]
+
+  created_at timestamptz [not null]
+
+  updated_at timestamptz [not null]
+
+  deleted_at timestamptz
+
+
+  Indexes {
+    slug [unique]
+  }
+
+
+  Note: "Primary tenant boundary. All customer-owned resources belong to a workspace."
+}
+
+
+//////////////////////////////////////////////////////
+// WORKSPACE MEMBERS
+//////////////////////////////////////////////////////
+
+Table workspace_members {
+  id uuid [pk]
+
+  workspace_id uuid [not null]
+
+  user_id uuid [not null]
+
+  role workspace_role [not null]
+
+  created_at timestamptz [not null]
+
+  updated_at timestamptz [not null]
+
+
+  Indexes {
+    workspace_id
+
+    user_id
+
+    (workspace_id, user_id) [unique]
+  }
+
+
+  Note: "Maps users to workspaces and defines workspace-level roles."
+}
+
+
+//////////////////////////////////////////////////////
+// PROJECTS
+//////////////////////////////////////////////////////
+
+Table projects {
+  id uuid [pk]
+
+  workspace_id uuid [not null]
+
+  name varchar(200) [not null]
+
+  description text
+
+  status project_status [not null]
+
+  start_date date
+
+  target_date date
+
+  created_by uuid [not null]
+
+  created_at timestamptz [not null]
+
+  updated_at timestamptz [not null]
+
+  deleted_at timestamptz
+
+
+  Indexes {
+    workspace_id
+
+    (workspace_id, status)
+
+    (workspace_id, created_at)
+  }
+
+
+  Note: "Lightweight project container owned by a workspace."
+}
+
+
+//////////////////////////////////////////////////////
+// PROJECT MEMBERS
+//////////////////////////////////////////////////////
+
+Table project_members {
+  id uuid [pk]
+
+  project_id uuid [not null]
+
+  user_id uuid [not null]
+
+  created_at timestamptz [not null]
+
+
+  Indexes {
+    project_id
+
+    user_id
+
+    (project_id, user_id) [unique]
+  }
+
+
+  Note: "Defines user participation in projects."
+}
+
+
+//////////////////////////////////////////////////////
+// TASKS
+//////////////////////////////////////////////////////
+
+Table tasks {
+  id uuid [pk]
+
+  workspace_id uuid [not null]
+
+  project_id uuid [not null]
+
+  title varchar(255) [not null]
+
+  description text
+
+  status task_status [not null]
+
+  priority task_priority [not null]
+
+  assignee_id uuid
+
+  due_date date
+
+  created_by uuid [not null]
+
+  created_at timestamptz [not null]
+
+  updated_at timestamptz [not null]
+
+  deleted_at timestamptz
+
+
+  Indexes {
+    workspace_id
+
+    project_id
+
+    assignee_id
+
+    (workspace_id, status)
+
+    (project_id, status)
+
+    due_date
+  }
+
+
+  Note: "Task belongs to both a workspace and project. Workspace ownership must match project ownership."
+}
+
+
+//////////////////////////////////////////////////////
+// USAGE
+//////////////////////////////////////////////////////
+
+Table usage {
+  id uuid [pk]
+
+  workspace_id uuid [not null]
+
+  resource usage_resource [not null]
+
+  count bigint [not null]
+
+  period_start timestamptz [not null]
+
+  period_end timestamptz [not null]
+
+  created_at timestamptz [not null]
+
+  updated_at timestamptz [not null]
+
+
+  Indexes {
+    workspace_id
+
+    (workspace_id, resource, period_start, period_end) [unique]
+  }
+
+
+  Note: "Tracks workspace-level resource consumption."
+}
+
+
+//////////////////////////////////////////////////////
+// NOTIFICATIONS
+//////////////////////////////////////////////////////
+
+Table notifications {
+  id uuid [pk]
+
+  workspace_id uuid [not null]
+
+  user_id uuid [not null]
+
+  type varchar(100) [not null]
+
+  title varchar(200) [not null]
+
+  message text [not null]
+
+  read_at timestamptz
+
+  created_at timestamptz [not null]
+
+
+  Indexes {
+    user_id
+
+    workspace_id
+
+    (user_id, read_at)
+  }
+
+
+  Note: "Stores in-app notifications for workspace users."
+}
+
+
+//////////////////////////////////////////////////////
+// AUDIT LOGS
+//////////////////////////////////////////////////////
+
+Table audit_logs {
+  id uuid [pk]
+
+  workspace_id uuid [not null]
+
+  actor_id uuid
+
+  action varchar(150) [not null]
+
+  resource_type varchar(100) [not null]
+
+  resource_id uuid
+
+  metadata jsonb
+
+  created_at timestamptz [not null]
+
+
+  Indexes {
+    workspace_id
+
+    (workspace_id, created_at)
+
+    actor_id
+
+    (resource_type, resource_id)
+  }
+
+
+  Note: "Append-only record of important workspace activity."
+}
+
+
+//////////////////////////////////////////////////////
+// API KEYS
+//////////////////////////////////////////////////////
+
+Table api_keys {
+  id uuid [pk]
+
+  workspace_id uuid [not null]
+
+  created_by uuid [not null]
+
+  name varchar(150) [not null]
+
+  key_prefix varchar(32) [not null]
+
+  key_hash varchar(255) [not null]
+
+  scopes jsonb [not null]
+
+  last_used_at timestamptz
+
+  expires_at timestamptz
+
+  revoked_at timestamptz
+
+  created_at timestamptz [not null]
+
+
+  Indexes {
+    workspace_id
+
+    key_prefix
+  }
+
+
+  Note: "Stores hashed API keys. Raw secrets are never persisted."
+}
+
+
+//////////////////////////////////////////////////////
+// RELATIONSHIPS
+//////////////////////////////////////////////////////
+
+Ref: workspace_members.workspace_id > workspaces.id
+
+Ref: workspace_members.user_id > users.id
+
+
+Ref: projects.workspace_id > workspaces.id
+
+Ref: projects.created_by > users.id
+
+
+Ref: project_members.project_id > projects.id
+
+Ref: project_members.user_id > users.id
+
+
+Ref: tasks.workspace_id > workspaces.id
+
+Ref: tasks.project_id > projects.id
+
+Ref: tasks.assignee_id > users.id
+
+Ref: tasks.created_by > users.id
+
+
+Ref: usage.workspace_id > workspaces.id
+
+
+Ref: notifications.workspace_id > workspaces.id
+
+Ref: notifications.user_id > users.id
+
+
+Ref: audit_logs.workspace_id > workspaces.id
+
+Ref: audit_logs.actor_id > users.id
+
+
+Ref: api_keys.workspace_id > workspaces.id
+
+Ref: api_keys.created_by > users.id
