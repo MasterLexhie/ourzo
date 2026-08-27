@@ -60,3 +60,9 @@ temp/
 *.njsproj
 *.sln
 *.sw?
+
+# AI
+.agents
+.claude
+.windsurf
+skills-lock.json
