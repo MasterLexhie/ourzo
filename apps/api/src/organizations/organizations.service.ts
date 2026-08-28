@@ -70,18 +70,25 @@ export class OrganizationsService {
 
     this.logger.log(`Organization created: ${workspace.id} by user: ${userId}`);
 
-    return this.mapToResponse(workspace as unknown as WorkspaceWithMembers);
+    return this.mapToResponse(workspace);
   }
 
   async findAllForUser(userId: string): Promise<OrganizationListResponseDto> {
-    const workspaces = await this.organizationsRepository.findUserOrganizations(userId);
+    const workspaces =
+      await this.organizationsRepository.findUserOrganizations(userId);
     return {
-      organizations: workspaces.map((w) => this.mapToResponse(w as unknown as WorkspaceWithMembers)),
+      organizations: workspaces.map((w) =>
+        this.mapToResponse(w as unknown as WorkspaceWithMembers),
+      ),
     };
   }
 
-  async findOne(userId: string, workspaceId: string): Promise<OrganizationResponseDto> {
-    const workspace = await this.organizationsRepository.findByIdWithDeleted(workspaceId);
+  async findOne(
+    userId: string,
+    workspaceId: string,
+  ): Promise<OrganizationResponseDto> {
+    const workspace =
+      await this.organizationsRepository.findByIdWithDeleted(workspaceId);
 
     if (!workspace) {
       throw new NotFoundException('Organization not found');
@@ -117,7 +124,7 @@ export class OrganizationsService {
       },
     });
 
-    return this.mapToResponse(fullWorkspace! as unknown as WorkspaceWithMembers);
+    return this.mapToResponse(fullWorkspace!);
   }
 
   async update(
@@ -125,19 +132,28 @@ export class OrganizationsService {
     workspaceId: string,
     dto: UpdateOrganizationDto,
   ): Promise<OrganizationResponseDto> {
-    const workspace = await this.organizationsRepository.findByIdWithDeleted(workspaceId);
+    const workspace =
+      await this.organizationsRepository.findByIdWithDeleted(workspaceId);
 
     if (!workspace || workspace.deletedAt) {
       throw new NotFoundException('Organization not found');
     }
 
-    const isAdminOrOwner = await this.organizationsRepository.isAdminOrOwner(workspaceId, userId);
+    const isAdminOrOwner = await this.organizationsRepository.isAdminOrOwner(
+      workspaceId,
+      userId,
+    );
     if (!isAdminOrOwner) {
-      throw new ForbiddenException('Insufficient permissions to update organization');
+      throw new ForbiddenException(
+        'Insufficient permissions to update organization',
+      );
     }
 
     if (dto.slug) {
-      const slugTaken = await this.organizationsRepository.isSlugTaken(dto.slug, workspaceId);
+      const slugTaken = await this.organizationsRepository.isSlugTaken(
+        dto.slug,
+        workspaceId,
+      );
       if (slugTaken) {
         throw new ConflictException('Organization slug already taken');
       }
@@ -149,25 +165,36 @@ export class OrganizationsService {
     return this.findOne(userId, workspaceId);
   }
 
-  async delete(userId: string, workspaceId: string): Promise<{ message: string }> {
-    const workspace = await this.organizationsRepository.findByIdWithDeleted(workspaceId);
+  async delete(
+    userId: string,
+    workspaceId: string,
+  ): Promise<{ message: string }> {
+    const workspace =
+      await this.organizationsRepository.findByIdWithDeleted(workspaceId);
 
     if (!workspace || workspace.deletedAt) {
       throw new NotFoundException('Organization not found');
     }
 
-    const isOwner = await this.organizationsRepository.isOwner(workspaceId, userId);
+    const isOwner = await this.organizationsRepository.isOwner(
+      workspaceId,
+      userId,
+    );
     if (!isOwner) {
       throw new ForbiddenException('Only owners can delete organizations');
     }
 
     await this.organizationsRepository.softDelete(workspaceId);
-    this.logger.log(`Organization soft deleted: ${workspaceId} by user: ${userId}`);
+    this.logger.log(
+      `Organization soft deleted: ${workspaceId} by user: ${userId}`,
+    );
 
     return { message: 'Organization deleted successfully' };
   }
 
-  private mapToResponse(workspace: WorkspaceWithMembers): OrganizationResponseDto {
+  private mapToResponse(
+    workspace: WorkspaceWithMembers,
+  ): OrganizationResponseDto {
     const members = workspace.members ?? [];
     const memberDtos: OrganizationMemberDto[] = members.map((m) => ({
       userId: m.user.id,

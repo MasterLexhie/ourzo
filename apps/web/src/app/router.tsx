@@ -4,6 +4,8 @@ import { LoginPage } from "@/features/auth/pages/login-page"
 import { RegisterPage } from "@/features/auth/pages/register-page"
 import { CreateWorkspacePage } from "@/features/organizations/pages/create-workspace-page"
 import { DashboardPage } from "@/features/dashboard/pages/dashboard-page"
+import { TeamPage } from "@/features/organizations/pages/team-page"
+import { AcceptInvitationPage } from "@/features/organizations/pages/accept-invitation-page"
 
 export const router = createBrowserRouter([
   {
@@ -23,6 +25,10 @@ export const router = createBrowserRouter([
     element: <OnboardingRoute><CreateWorkspacePage /></OnboardingRoute>,
   },
   {
+    path: "/accept-invitation",
+    element: <PublicRoute><AcceptInvitationPage /></PublicRoute>,
+  },
+  {
     path: "/dashboard",
     element: <ProtectedRoute><DashboardPage /></ProtectedRoute>,
     children: [
@@ -32,7 +38,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "team",
-        element: <div>Team page - coming soon</div>,
+        element: <TeamPage />,
       },
       {
         path: "settings",

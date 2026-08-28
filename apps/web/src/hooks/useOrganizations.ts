@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { organizationsService } from '@/services';
 import { useOrganizationStore } from '@/stores';
-import type { CreateOrganizationDto, UpdateOrganizationDto } from '@/types/organization.types';
+import type {
+  CreateOrganizationDto,
+  UpdateOrganizationDto,
+  CreateInvitationDto,
+  AcceptInvitationDto,
+  UpdateMemberRoleDto,
+  TransferOwnershipDto,
+} from '@/types/organization.types';
 
 export const useOrganizations = () => {
   return useQuery({
@@ -58,6 +65,101 @@ export const useDeleteOrganization = () => {
     onSuccess: (_data, workspaceId) => {
       removeOrganization(workspaceId);
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
+    },
+  });
+};
+
+// Invitations
+export const useInvitations = (workspaceId: string) => {
+  return useQuery({
+    queryKey: ['invitations', workspaceId],
+    queryFn: () => organizationsService.listInvitations(workspaceId),
+    select: (data) => data.invitations,
+    enabled: !!workspaceId,
+    staleTime: 2 * 60 * 1000,
+  });
+};
+
+export const useCreateInvitation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ workspaceId, dto }: { workspaceId: string; dto: CreateInvitationDto }) =>
+      organizationsService.createInvitation(workspaceId, dto),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['invitations', variables.workspaceId] });
+    },
+  });
+};
+
+export const useAcceptInvitation = () => {
+  return useMutation({
+    mutationFn: (dto: AcceptInvitationDto) => organizationsService.acceptInvitation(dto),
+  });
+};
+
+export const useRevokeInvitation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ workspaceId, invitationId }: { workspaceId: string; invitationId: string }) =>
+      organizationsService.revokeInvitation(workspaceId, invitationId),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['invitations', variables.workspaceId] });
+    },
+  });
+};
+
+// Members
+export const useMembers = (workspaceId: string) => {
+  return useQuery({
+    queryKey: ['members', workspaceId],
+    queryFn: () => organizationsService.listMembers(workspaceId),
+    select: (data) => data.members,
+    enabled: !!workspaceId,
+    staleTime: 2 * 60 * 1000,
+  });
+};
+
+export const useUpdateMemberRole = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      workspaceId,
+      userId,
+      dto,
+    }: {
+      workspaceId: string;
+      userId: string;
+      dto: UpdateMemberRoleDto;
+    }) => organizationsService.updateMemberRole(workspaceId, userId, dto),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['members', variables.workspaceId] });
+    },
+  });
+};
+
+export const useRemoveMember = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ workspaceId, userId }: { workspaceId: string; userId: string }) =>
+      organizationsService.removeMember(workspaceId, userId),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['members', variables.workspaceId] });
+    },
+  });
+};
+
+export const useTransferOwnership = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ workspaceId, dto }: { workspaceId: string; dto: TransferOwnershipDto }) =>
+      organizationsService.transferOwnership(workspaceId, dto),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['members', variables.workspaceId] });
     },
   });
 };

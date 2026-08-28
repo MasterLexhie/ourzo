@@ -14,19 +14,24 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {},
+    options: RequestInit & { workspaceId?: string } = {},
   ): Promise<T> {
+    const { workspaceId, ...fetchOptions } = options;
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...fetchOptions.headers,
     };
 
     if (this.accessToken) {
       (headers as Record<string, string>)['Authorization'] = `Bearer ${this.accessToken}`;
     }
 
+    if (workspaceId) {
+      (headers as Record<string, string>)['x-workspace-id'] = workspaceId;
+    }
+
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
+      ...fetchOptions,
       headers,
     });
 
@@ -42,26 +47,28 @@ class ApiClient {
     return response.json();
   }
 
-  get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'GET' });
+  get<T>(endpoint: string, options?: { workspaceId?: string }): Promise<T> {
+    return this.request<T>(endpoint, { method: 'GET', ...options });
   }
 
-  post<T>(endpoint: string, data: unknown): Promise<T> {
+  post<T>(endpoint: string, data: unknown, options?: { workspaceId?: string }): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: JSON.stringify(data),
+      ...options,
     });
   }
 
-  patch<T>(endpoint: string, data: unknown): Promise<T> {
+  patch<T>(endpoint: string, data: unknown, options?: { workspaceId?: string }): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PATCH',
       body: JSON.stringify(data),
+      ...options,
     });
   }
 
-  delete<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  delete<T>(endpoint: string, options?: { workspaceId?: string }): Promise<T> {
+    return this.request<T>(endpoint, { method: 'DELETE', ...options });
   }
 }
 

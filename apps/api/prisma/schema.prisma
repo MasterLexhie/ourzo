@@ -51,6 +51,13 @@ enum TokenType {
   refresh
 }
 
+enum InvitationStatus {
+  pending
+  accepted
+  expired
+  revoked
+}
+
 model User {
   id              String    @id @default(uuid()) @db.Uuid
   email           String    @unique @db.VarChar(320)
@@ -69,6 +76,7 @@ model User {
   notifications    Notification[]
   auditLogs        AuditLog[]
   createdApiKeys   ApiKey[]          @relation("ApiKeyCreatedBy")
+  sentInvitations  Invitation[]      @relation("InvitationInvitedBy")
   refreshTokens    RefreshToken[]
 
   @@index([email])
@@ -91,6 +99,7 @@ model Workspace {
   notifications Notification[]
   auditLogs     AuditLog[]
   apiKeys       ApiKey[]
+  invitations   Invitation[]
 
   @@index([slug])
   @@map("workspaces")
@@ -256,6 +265,28 @@ model ApiKey {
   @@index([workspaceId])
   @@index([keyPrefix])
   @@map("api_keys")
+}
+
+model Invitation {
+  id          String            @id @default(uuid()) @db.Uuid
+  workspaceId String            @db.Uuid
+  email       String            @db.VarChar(320)
+  role        WorkspaceRole     @default(member)
+  token       String            @unique @db.VarChar(255)
+  status      InvitationStatus  @default(pending)
+  invitedBy   String            @db.Uuid
+  expiresAt   DateTime          @db.Timestamptz
+  acceptedAt  DateTime?         @db.Timestamptz
+  createdAt   DateTime          @default(now()) @db.Timestamptz
+  updatedAt   DateTime          @updatedAt @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  inviter   User      @relation("InvitationInvitedBy", fields: [invitedBy], references: [id], onDelete: Restrict)
+
+  @@index([workspaceId])
+  @@index([email])
+  @@index([token])
+  @@map("invitations")
 }
 
 model RefreshToken {

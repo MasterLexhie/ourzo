@@ -1,16 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
-import { Workspace, WorkspaceMember, User, WorkspacePlan, WorkspaceRole } from '@prisma/client';
+import { Workspace, WorkspacePlan, WorkspaceRole } from '@prisma/client';
 
 @Injectable()
 export class OrganizationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(data: {
-    name: string;
-    slug: string;
-    ownerId: string;
-  }) {
+  async create(data: { name: string; slug: string; ownerId: string }) {
     return this.prisma.workspace.create({
       data: {
         name: data.name,
@@ -91,7 +87,10 @@ export class OrganizationsRepository {
     });
   }
 
-  async update(id: string, data: Partial<Pick<Workspace, 'name' | 'slug'>>): Promise<Workspace> {
+  async update(
+    id: string,
+    data: Partial<Pick<Workspace, 'name' | 'slug'>>,
+  ): Promise<Workspace> {
     return this.prisma.workspace.update({
       where: { id },
       data,
@@ -113,7 +112,10 @@ export class OrganizationsRepository {
     return workspace !== null && workspace.id !== excludeId;
   }
 
-  async getMemberRole(workspaceId: string, userId: string): Promise<WorkspaceRole | null> {
+  async getMemberRole(
+    workspaceId: string,
+    userId: string,
+  ): Promise<WorkspaceRole | null> {
     const membership = await this.prisma.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId } },
       select: { role: true },

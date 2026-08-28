@@ -20,7 +20,10 @@ import {
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
-import { OrganizationResponseDto, OrganizationListResponseDto } from './dto/organization-response.dto';
+import {
+  OrganizationResponseDto,
+  OrganizationListResponseDto,
+} from './dto/organization-response.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 import { WorkspaceContextGuard } from '@/authorization/guards/workspace-context.guard';
 import { WorkspaceRolesGuard } from '@/authorization/guards/workspace-roles.guard';
@@ -76,7 +79,10 @@ export class OrganizationsController {
     description: 'Organization details',
     type: OrganizationResponseDto,
   })
-  @ApiResponse({ status: 403, description: 'Not a member of this organization' })
+  @ApiResponse({
+    status: 403,
+    description: 'Not a member of this organization',
+  })
   @ApiResponse({ status: 404, description: 'Organization not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async findOne(
@@ -115,8 +121,14 @@ export class OrganizationsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete organization (soft delete)' })
   @ApiParam({ name: 'workspaceId', description: 'Organization ID' })
-  @ApiResponse({ status: 200, description: 'Organization deleted successfully' })
-  @ApiResponse({ status: 403, description: 'Only owners can delete organizations' })
+  @ApiResponse({
+    status: 200,
+    description: 'Organization deleted successfully',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Only owners can delete organizations',
+  })
   @ApiResponse({ status: 404, description: 'Organization not found' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async delete(

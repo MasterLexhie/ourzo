@@ -226,7 +226,9 @@ export class AuthService {
   }
 
   private async hashPassword(password: string): Promise<string> {
-    const rounds = Number(this.configService.get<number>('BCRYPT_ROUNDS') ?? 12);
+    const rounds = Number(
+      this.configService.get<number>('BCRYPT_ROUNDS') ?? 12,
+    );
     return hash(password, rounds);
   }
 
@@ -238,7 +240,9 @@ export class AuthService {
   }
 
   private async hashToken(token: string): Promise<string> {
-    const rounds = Number(this.configService.get<number>('BCRYPT_ROUNDS') ?? 12);
+    const rounds = Number(
+      this.configService.get<number>('BCRYPT_ROUNDS') ?? 12,
+    );
     return hash(token, rounds);
   }
 
