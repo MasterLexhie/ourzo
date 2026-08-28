@@ -1,9 +1,18 @@
 {
   "moduleFileExtensions": ["js", "json", "ts"],
-  "rootDir": ".",
+  "rootDir": "..",
   "testEnvironment": "node",
-  "testRegex": ".e2e-spec.ts$",
+  "testRegex": "test/.*\\.e2e-spec\\.ts$",
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
+  },
+  "transformIgnorePatterns": [
+    "/node_modules/(?!(.pnpm/)?(@nestjs|bcrypt|passport-jwt|ms|jsonwebtoken)/)"
+  ],
+  "moduleNameMapper": {
+    "^@/(.*)$": "<rootDir>/src/$1",
+    "^@nestjs/jwt$": "<rootDir>/test/__mocks__/nestjs-jwt.mock.ts",
+    "^@nestjs/passport$": "<rootDir>/test/__mocks__/nestjs-passport.mock.ts",
+    "^@nestjs/config$": "<rootDir>/test/__mocks__/nestjs-config.mock.ts"
   }
 }

@@ -2,17 +2,21 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { PublicRouteGuard } from './auth';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  const reflector = app.get(Reflector);
 
   app.enableCors({
-    origin: configService.get<string>('ALLOW_ORIGIN') || 'http://localhost:5173/',
+    origin:
+      configService.get<string>('ALLOW_ORIGIN') || 'http://localhost:5173/',
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     credentials: true,
-  })
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -24,6 +28,8 @@ async function bootstrap() {
       },
     }),
   );
+
+  app.useGlobalGuards(new PublicRouteGuard(reflector));
 
   const config = new DocumentBuilder()
     .setTitle('Ourzo API')
