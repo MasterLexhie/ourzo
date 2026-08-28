@@ -5,7 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
+import { hash, verify } from '@node-rs/bcrypt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -226,20 +226,20 @@ export class AuthService {
   }
 
   private async hashPassword(password: string): Promise<string> {
-    const rounds = this.configService.get<number>('BCRYPT_ROUNDS') ?? 12;
-    return bcrypt.hash(password, rounds);
+    const rounds = Number(this.configService.get<number>('BCRYPT_ROUNDS') ?? 12);
+    return hash(password, rounds);
   }
 
   private async verifyPassword(
     password: string,
     hash: string,
   ): Promise<boolean> {
-    return bcrypt.compare(password, hash);
+    return verify(password, hash);
   }
 
   private async hashToken(token: string): Promise<string> {
-    const rounds = this.configService.get<number>('BCRYPT_ROUNDS') ?? 12;
-    return bcrypt.hash(token, rounds);
+    const rounds = Number(this.configService.get<number>('BCRYPT_ROUNDS') ?? 12);
+    return hash(token, rounds);
   }
 
   private parseExpiryToSeconds(expiry: string): number {
