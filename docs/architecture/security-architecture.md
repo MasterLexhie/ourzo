@@ -135,6 +135,15 @@ Raw API keys must not be stored in plaintext.
 
 Every API key belongs to exactly one workspace.
 
+### Implementation
+
+- **Generation:** `crypto.randomBytes` with rejection sampling over `[a-z0-9]`. Shape is `ourzo_<8>_<32>`. Only a bcrypt hash and the lookup prefix (`ourzo_<8>`) are stored.
+- **Transport:** `Authorization: Bearer ourzo_...`. The `ourzo_` prefix tells a key apart from a JWT (ADR-009).
+- **Authentication:** `JwtOrApiKeyGuard` → `ApiKeyAuthGuard`. Invalid, revoked or expired keys get `401`, and `lastUsedAt` is updated on success.
+- **Workspace binding:** `WorkspaceContextGuard` resolves the workspace from the key itself. A different `X-Workspace-Id` header, or a different workspace id in the param, query or body, gets `403`.
+- **Identity:** the request acts as the key's creator. The creator's membership is re-checked on every request.
+- **Auditing:** key-originated writes are tagged `via: api_key` with the `apiKeyId`.
+
 ---
 
 ## 7. API-Key Scopes
@@ -151,6 +160,18 @@ tasks:write
 ```
 
 API-key access remains subject to tenant boundaries and authorization rules.
+
+Implemented scopes and routes (anything else is closed to keys):
+
+| Scope | Routes |
+|---|---|
+| `projects:read` | `GET /api/projects`, `GET /api/projects/:id`, `GET /api/projects/:id/progress` |
+| `projects:write` | `POST/PATCH/DELETE /api/projects…`, project member add/remove |
+| `tasks:read` | `GET /api/tasks`, `GET /api/tasks/:id` |
+| `tasks:write` | `POST/PATCH/DELETE /api/tasks…` |
+| `members:read` | `GET /api/members` |
+| `usage:read` | `GET /api/usage` |
+| `audit:read` | `GET /api/audit` |
 
 ---
 
@@ -174,7 +195,18 @@ Sensitive operations
     → stricter
 ```
 
-Exact limits will be defined during implementation.
+### Implemented policies
+
+`RateLimitGuard` runs after authentication, and limits are read from the environment.
+
+| Policy | Applied to | Key | Default | Env vars | Redis down |
+|---|---|---|---|---|---|
+| `auth` | register, login, refresh | client IP | 10 / 60 s | `RATE_LIMIT_AUTH_MAX`, `RATE_LIMIT_AUTH_WINDOW_MS` | **fail closed** (503) |
+| `user` | all authenticated controllers | user id | 300 / 60 s | `RATE_LIMIT_DEFAULT_MAX`, `RATE_LIMIT_WINDOW_MS` | fail open (logged) |
+| `api-key` | key-authenticated requests | API key id | 120 / 60 s | `RATE_LIMIT_API_KEY_MAX`, `RATE_LIMIT_WINDOW_MS` | fail open (logged) |
+
+- Exceeding a limit returns `429 Too Many Requests` with a `Retry-After` header.
+- Every limited response carries `X-RateLimit-Limit` and `X-RateLimit-Remaining`.
 
 ---
 

@@ -64,9 +64,3 @@ Ourzo Platform
 │
 └── System Administration
 ```
-
-## MVP Principle
-
-The MVP should demonstrate **engineering depth over feature count**.
-
-The project should be small enough to build rapidly with AI assistance while remaining understandable, testable, and defensible in a technical interview.

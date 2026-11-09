@@ -212,3 +212,36 @@ If a module such as Notifications, Usage or Audit becomes an independently deplo
 ```text
 React → REST → NestJS
 ```
+
+---
+
+## ADR-009 — API Keys Share the Bearer Header
+
+### Status
+
+Accepted
+
+### Decision
+
+API keys are sent as `Authorization: Bearer <key>`, the same header as user JWTs. They are told apart by the `ourzo_` prefix (key shape `ourzo_<8 chars>_<32 chars>`).
+
+### Reason
+
+- One header keeps clients and Swagger simple.
+- The prefix is unambiguous: a JWT always starts with `eyJ`.
+- A key only ever reaches the routes that opt in.
+
+### Rules
+
+- `JwtOrApiKeyGuard` sends `ourzo_` tokens to `ApiKeyAuthGuard` and everything else to `JwtAuthGuard`. Key-capable controllers use it.
+- An invalid, revoked or expired key gets **401**.
+- A key is bound to exactly one workspace. `WorkspaceContextGuard` pins the request to it, and returns **403** if any other workspace id is supplied.
+- A key acts as its creator. If the creator is no longer a workspace member, the key stops working.
+- `ApiKeyScopesGuard` is deny-by-default for keys: a route must declare `@RequireScopes(...)`.
+- Invitations, API-key management, organization management, member mutations, notifications and auth stay JWT-only.
+- Audit entries written during key requests carry `metadata.via = "api_key"` and `apiKeyId`.
+
+### Consequences
+
+Any new controller that should accept API keys must opt in explicitly with the guard and scopes. Without that, keys are rejected.
+

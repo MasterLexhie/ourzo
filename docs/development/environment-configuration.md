@@ -147,6 +147,8 @@ NODE_ENV=
 
 PORT=
 
+WEB_APP_URL=
+
 DATABASE_URL=
 
 JWT_SECRET=
@@ -156,6 +158,12 @@ JWT_REFRESH_SECRET=
 REDIS_HOST=
 
 REDIS_PORT=
+
+RATE_LIMIT_AUTH_MAX=
+RATE_LIMIT_AUTH_WINDOW_MS=
+RATE_LIMIT_DEFAULT_MAX=
+RATE_LIMIT_API_KEY_MAX=
+RATE_LIMIT_WINDOW_MS=
 ```
 
 ---
@@ -166,11 +174,17 @@ REDIS_PORT=
 |---|---|
 | NODE_ENV | Application environment |
 | PORT | API server port |
+| WEB_APP_URL | Public URL of the web app; used to build shareable invitation links (`<WEB_APP_URL>/accept-invitation?token=…`). Defaults to `http://localhost:5173` |
 | DATABASE_URL | PostgreSQL connection string |
 | JWT_SECRET | Access token signing key |
 | JWT_REFRESH_SECRET | Refresh token signing key |
 | REDIS_HOST | Redis connection host |
 | REDIS_PORT | Redis connection port |
+| RATE_LIMIT_AUTH_MAX | Max register/login/refresh requests per IP per auth window (default 10) |
+| RATE_LIMIT_AUTH_WINDOW_MS | Auth rate-limit window in ms (default 60000) |
+| RATE_LIMIT_DEFAULT_MAX | Max authenticated requests per user per window (default 300) |
+| RATE_LIMIT_API_KEY_MAX | Max requests per API key per window (default 120) |
+| RATE_LIMIT_WINDOW_MS | Window for user/API-key limits in ms (default 60000) |
 
 ---
 

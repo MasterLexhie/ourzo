@@ -195,7 +195,13 @@ infrastructure/docker/
 Start infrastructure:
 
 ```bash
-docker compose up
+docker compose -f docker-compose.dev.yml up
+```
+
+The API image builds from the repository root (`context: .`, `dockerfile: apps/api/Dockerfile`). To build it alone:
+
+```bash
+docker build -f apps/api/Dockerfile .
 ```
 
 ---
@@ -325,10 +331,16 @@ Lint:
 pnpm lint
 ```
 
-Format:
+Format check (API):
 
 ```bash
-pnpm format
+pnpm format:check
+```
+
+Fix lint issues (API):
+
+```bash
+pnpm --filter ourzo-api lint:fix
 ```
 
 Test:

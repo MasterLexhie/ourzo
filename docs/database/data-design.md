@@ -402,8 +402,8 @@ Initial task states:
 ```text
 todo
 in_progress
+blocked
 completed
-cancelled
 ```
 
 ### Task Priority

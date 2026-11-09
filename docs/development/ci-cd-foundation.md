@@ -149,6 +149,8 @@ pnpm format:check
 
 Purpose: Ensure formatting consistency.
 
+Currently enforced for `apps/api` (Prettier). `apps/web` uses oxlint only. Adding Prettier to web needs dependency approval.
+
 ---
 
 ### Testing
@@ -172,6 +174,20 @@ pnpm build
 ```
 
 Purpose: Ensure applications compile successfully.
+
+The root scripts `lint`, `test`, `build` and `format:check` all run through Turborepo. CI runs `prisma generate` before lint and build, because type-aware lint and `nest build` need the generated client.
+
+### Docker Image (API)
+
+The image is built from the **repository root** so pnpm workspace files and the lockfile are available:
+
+```bash
+docker build -f apps/api/Dockerfile .
+```
+
+- CI (`docker/build-push-action`) and both compose files use `context: .` with `apps/api/Dockerfile`.
+- The runtime image runs `node dist/main.js` from `/app/apps/api`.
+- The container HEALTHCHECK probes `GET /health`.
 
 ---
 

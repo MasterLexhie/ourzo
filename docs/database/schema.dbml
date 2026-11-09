@@ -31,8 +31,8 @@ Enum project_status {
 Enum task_status {
   todo
   in_progress
+  blocked
   completed
-  cancelled
 }
 
 Enum task_priority {

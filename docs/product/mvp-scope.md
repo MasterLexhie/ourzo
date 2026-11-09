@@ -186,7 +186,3 @@ The most important technical capabilities are:
 12. Automated testing
 
 ---
-
-## MVP Constraint
-
-The MVP should be small enough to build rapidly with AI assistance while remaining understandable, testable, and defensible in a technical interview.

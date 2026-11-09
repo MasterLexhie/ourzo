@@ -67,6 +67,30 @@ Potential limits include:
 
 Final limits are implementation decisions rather than architectural assumptions.
 
+### Implemented limits
+
+| Resource | Free | Pro | Business | Counted as |
+|---|---|---|---|---|
+| Members | 5 | 25 | 100 | current workspace members |
+| Projects | 3 | 20 | 100 | current non-archived projects |
+| API keys | 2 | 10 | 50 | current non-revoked keys |
+| Tasks | 50 | 500 | 5000 | tasks created in the current calendar month (`Usage` table) |
+
+Where the limit is checked (`UsageService.assertWithinLimit`):
+
+- Project create.
+- Task create. The monthly task counter is incremented afterwards.
+- Invitation create and accept, for members.
+- API-key create.
+
+When a limit is reached the API returns `403` with the message `"<Resource> limit reached (current/limit)"`.
+
+`GET /api/usage` loads the plan from the workspace record. A resource only counts as "exceeded" when its limit is greater than 0.
+
+**Note:** workspaces that are already over their plan's limits can keep their existing resources, but they can't create more until they're back under the limit or move to a higher plan.
+
+Request rate limits are covered in `security-architecture.md` §8.
+
 ---
 
 ## 6. Usage Integrity
