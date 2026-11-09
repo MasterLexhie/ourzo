@@ -2,22 +2,22 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class RateLimitConfigDto {
   @ApiProperty({ example: 100 })
-  maxRequests: number;
+  maxRequests!: number;
 
   @ApiProperty({ example: 60 })
-  windowMs: number;
+  windowMs!: number;
 
   @ApiProperty({ example: 'api' })
-  keyPrefix: string;
+  keyPrefix!: string;
 }
 
 export class RateLimitInfoDto {
   @ApiProperty({ example: 95 })
-  remaining: number;
+  remaining!: number;
 
   @ApiProperty({ example: 60 })
-  resetInSeconds: number;
+  resetInSeconds!: number;
 
   @ApiProperty({ example: false })
-  limited: boolean;
+  limited!: boolean;
 }

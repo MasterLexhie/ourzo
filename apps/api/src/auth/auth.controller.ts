@@ -26,6 +26,15 @@ import { RateLimitGuard } from '@/rate-limit/rate-limit.guard';
 import { RateLimit } from '@/rate-limit/decorators/rate-limit.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 
+/** Shape attached to the request by JwtStrategy.validate(). */
+interface AuthenticatedUser {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  emailVerifiedAt: Date | null;
+}
+
 @ApiTags('Authentication')
 @Controller('api/auth')
 export class AuthController {
@@ -106,7 +115,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current authenticated user' })
   @ApiResponse({ status: 200, description: 'Current user' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  me(@CurrentUser() user: any): any {
+  me(@CurrentUser() user: AuthenticatedUser): AuthenticatedUser {
     return user;
   }
 }

@@ -4,7 +4,7 @@ import {
   ConflictException,
   Logger,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { hash, verify } from '@node-rs/bcrypt';
 import { createHash } from 'crypto';
 import { ConfigService } from '@nestjs/config';
@@ -161,8 +161,7 @@ export class AuthService {
       { sub: userId, type: 'access' },
       {
         secret: this.configService.getOrThrow<string>('JWT_SECRET'),
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        expiresIn: accessTokenExpiry as any,
+        expiresIn: accessTokenExpiry as JwtSignOptions['expiresIn'],
       },
     );
 
@@ -170,8 +169,7 @@ export class AuthService {
       { sub: userId, type: 'refresh' },
       {
         secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        expiresIn: refreshTokenExpiry as any,
+        expiresIn: refreshTokenExpiry as JwtSignOptions['expiresIn'],
       },
     );
 
@@ -192,9 +190,10 @@ export class AuthService {
     ipAddress?: string,
   ): Promise<void> {
     const tokenHash = await this.hashToken(refreshToken);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const decoded = this.jwtService.decode(refreshToken);
-    const exp = (decoded as { exp?: number } | null)?.exp;
+    const decoded = this.jwtService.decode<{ exp?: number } | null>(
+      refreshToken,
+    );
+    const exp = decoded?.exp;
 
     await this.prisma.refreshToken.create({
       data: {

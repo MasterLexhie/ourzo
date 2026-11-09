@@ -6,7 +6,7 @@ export class CreateInvitationDto {
   @ApiProperty({ description: 'Email of the user to invite' })
   @IsEmail()
   @MaxLength(320)
-  email: string;
+  email!: string;
 
   @ApiPropertyOptional({
     description: 'Role for the invited user',

@@ -21,7 +21,7 @@ export class CreateProjectDto {
   @IsNotEmpty()
   @MinLength(1)
   @MaxLength(200)
-  name: string;
+  name!: string;
 
   @ApiPropertyOptional({
     description: 'Project description',

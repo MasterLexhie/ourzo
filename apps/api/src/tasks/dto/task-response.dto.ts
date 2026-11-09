@@ -3,39 +3,39 @@ import { TaskStatus, TaskPriority } from '@prisma/client';
 
 export class TaskAssigneeDto {
   @ApiProperty({ example: 'user-uuid' })
-  userId: string;
+  userId!: string;
 
   @ApiProperty({ example: 'user@example.com' })
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: 'John' })
-  firstName: string;
+  firstName!: string;
 
   @ApiProperty({ example: 'Doe' })
-  lastName: string;
+  lastName!: string;
 }
 
 export class TaskResponseDto {
   @ApiProperty({ example: 'task-uuid' })
-  id: string;
+  id!: string;
 
   @ApiProperty({ example: 'workspace-uuid' })
-  workspaceId: string;
+  workspaceId!: string;
 
   @ApiProperty({ example: 'project-uuid' })
-  projectId: string;
+  projectId!: string;
 
   @ApiProperty({ example: 'Design new homepage' })
-  title: string;
+  title!: string;
 
   @ApiPropertyOptional({ example: 'Create wireframes and mockups' })
   description?: string | null;
 
   @ApiProperty({ enum: TaskStatus, example: 'todo' })
-  status: TaskStatus;
+  status!: TaskStatus;
 
   @ApiProperty({ enum: TaskPriority, example: 'medium' })
-  priority: TaskPriority;
+  priority!: TaskPriority;
 
   @ApiPropertyOptional({ type: TaskAssigneeDto, nullable: true })
   assignee?: TaskAssigneeDto | null;
@@ -44,25 +44,25 @@ export class TaskResponseDto {
   dueDate?: Date | null;
 
   @ApiProperty({ example: 'user-uuid' })
-  createdBy: string;
+  createdBy!: string;
 
   @ApiProperty({ example: '2024-01-15T10:30:00Z' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiProperty({ example: '2024-01-15T10:30:00Z' })
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 export class TaskListResponseDto {
   @ApiProperty({ type: [TaskResponseDto] })
-  tasks: TaskResponseDto[];
+  tasks!: TaskResponseDto[];
 
   @ApiProperty({ example: 50 })
-  total: number;
+  total!: number;
 
   @ApiProperty({ example: 1 })
-  page: number;
+  page!: number;
 
   @ApiProperty({ example: 20 })
-  limit: number;
+  limit!: number;
 }

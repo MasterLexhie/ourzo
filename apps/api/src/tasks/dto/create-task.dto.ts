@@ -22,7 +22,7 @@ export class CreateTaskDto {
   @IsNotEmpty()
   @MinLength(1)
   @MaxLength(255)
-  title: string;
+  title!: string;
 
   @ApiPropertyOptional({
     description: 'Task description',
@@ -38,7 +38,7 @@ export class CreateTaskDto {
     example: 'project-uuid',
   })
   @IsUUID()
-  projectId: string;
+  projectId!: string;
 
   @ApiPropertyOptional({
     description: 'Task status',

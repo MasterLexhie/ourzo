@@ -3,41 +3,41 @@ import { UsageResource, WorkspacePlan } from '@prisma/client';
 
 export class UsageItemDto {
   @ApiProperty({ enum: UsageResource, example: 'members' })
-  resource: UsageResource;
+  resource!: UsageResource;
 
   @ApiProperty({ example: 3 })
-  current: number;
+  current!: number;
 
   @ApiProperty({ example: 5 })
-  limit: number;
+  limit!: number;
 
   @ApiProperty({ example: 60 })
-  percentage: number;
+  percentage!: number;
 
   @ApiProperty({ example: false })
-  warning: boolean;
+  warning!: boolean;
 
   @ApiProperty({ example: false })
-  exceeded: boolean;
+  exceeded!: boolean;
 }
 
 export class UsageResponseDto {
   @ApiProperty({ enum: WorkspacePlan, example: 'free' })
-  plan: WorkspacePlan;
+  plan!: WorkspacePlan;
 
   @ApiProperty({ type: [UsageItemDto] })
-  usage: UsageItemDto[];
+  usage!: UsageItemDto[];
 
   @ApiProperty({ example: '2024-01-01T00:00:00Z' })
-  periodStart: Date;
+  periodStart!: Date;
 
   @ApiProperty({ example: '2024-01-31T23:59:59Z' })
-  periodEnd: Date;
+  periodEnd!: Date;
 }
 
 export class CheckLimitResponseDto {
   @ApiProperty({ example: true })
-  allowed: boolean;
+  allowed!: boolean;
 
   @ApiPropertyOptional({
     example: 'Project limit reached (3/3). Upgrade to Pro for more projects.',
