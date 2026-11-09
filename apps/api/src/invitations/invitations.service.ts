@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '@/prisma/prisma.service';
+import { MembersRepository } from '@/members/repositories/members.repository';
 import { AuditService } from '@/audit/audit.service';
 import { UsageService } from '@/usage/usage.service';
 import { InvitationsRepository } from './repositories/invitations.repository';
@@ -56,7 +56,7 @@ export class InvitationsService {
   private readonly EXPIRY_DAYS = 7;
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly membersRepository: MembersRepository,
     private readonly invitationsRepository: InvitationsRepository,
     private readonly configService: ConfigService,
     private readonly auditService: AuditService,
@@ -68,9 +68,10 @@ export class InvitationsService {
     workspaceId: string,
     dto: CreateInvitationDto,
   ): Promise<CreateInvitationResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -83,15 +84,7 @@ export class InvitationsService {
       throw new ForbiddenException('Only owners and admins can invite members');
     }
 
-    const existingMember = await this.prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        user: { email: dto.email },
-      },
-      include: { user: true },
-    });
-
-    if (existingMember) {
+    if (await this.membersRepository.isEmailMember(workspaceId, dto.email)) {
       throw new ConflictException('User is already a member of this workspace');
     }
 
@@ -152,9 +145,10 @@ export class InvitationsService {
     userId: string,
     workspaceId: string,
   ): Promise<InvitationListResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -206,9 +200,7 @@ export class InvitationsService {
       throw new NotFoundException('Workspace not found');
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
+    const user = await this.membersRepository.findUserProfile(userId);
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -220,11 +212,10 @@ export class InvitationsService {
       );
     }
 
-    const existingMembership = await this.prisma.workspaceMember.findUnique({
-      where: {
-        workspaceId_userId: { workspaceId: invitation.workspaceId, userId },
-      },
-    });
+    const existingMembership = await this.membersRepository.findMembership(
+      invitation.workspaceId,
+      userId,
+    );
 
     if (existingMembership) {
       await this.invitationsRepository.updateStatus(
@@ -241,20 +232,23 @@ export class InvitationsService {
       'members',
     );
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.workspaceMember.create({
-        data: {
+    // Membership, invitation status and audit entry commit atomically.
+    await this.membersRepository.withTransaction(async (tx) => {
+      await this.membersRepository.addMember(
+        {
           workspaceId: invitation.workspaceId,
           userId,
           role: invitation.role,
         },
-      });
+        tx,
+      );
 
       await this.invitationsRepository.updateStatus(
         invitation.id,
         invitation.workspaceId,
         InvitationStatus.accepted,
         new Date(),
+        tx,
       );
 
       await this.createAuditLogTx(
@@ -285,9 +279,10 @@ export class InvitationsService {
     workspaceId: string,
     invitationId: string,
   ): Promise<{ message: string }> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');

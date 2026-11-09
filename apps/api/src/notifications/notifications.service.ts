@@ -4,7 +4,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
+import { MembersRepository } from '@/members/repositories/members.repository';
 import { NotificationsRepository } from './repositories/notifications.repository';
 import {
   NotificationResponseDto,
@@ -16,18 +16,44 @@ export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly membersRepository: MembersRepository,
     private readonly notificationsRepository: NotificationsRepository,
   ) {}
+
+  /** The only write path for notifications (used by other modules). */
+  async notify(entry: {
+    workspaceId: string;
+    userId: string;
+    type: string;
+    title: string;
+    message: string;
+  }): Promise<void> {
+    await this.notificationsRepository.create(entry);
+  }
+
+  async notifyMany(
+    entries: Array<{
+      workspaceId: string;
+      userId: string;
+      type: string;
+      title: string;
+      message: string;
+    }>,
+  ): Promise<void> {
+    if (entries.length > 0) {
+      await this.notificationsRepository.createMany(entries);
+    }
+  }
 
   async findAll(
     userId: string,
     workspaceId: string,
     options?: { read?: boolean; page?: number; limit?: number },
   ): Promise<NotificationListResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -54,9 +80,10 @@ export class NotificationsService {
     workspaceId: string,
     notificationId: string,
   ): Promise<NotificationResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -84,9 +111,10 @@ export class NotificationsService {
     userId: string,
     workspaceId: string,
   ): Promise<{ message: string; count: number }> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');

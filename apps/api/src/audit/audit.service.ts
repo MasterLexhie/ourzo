@@ -1,6 +1,6 @@
 import { Injectable, ForbiddenException, Logger } from '@nestjs/common';
 import { getRequestContext } from '@/common/request-context';
-import { PrismaService } from '@/prisma/prisma.service';
+import { MembersRepository } from '@/members/repositories/members.repository';
 import { AuditRepository } from './repositories/audit.repository';
 import {
   AuditLogResponseDto,
@@ -13,7 +13,7 @@ export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly membersRepository: MembersRepository,
     private readonly auditRepository: AuditRepository,
   ) {}
 
@@ -64,9 +64,10 @@ export class AuditService {
       limit?: number;
     },
   ): Promise<AuditLogListResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');

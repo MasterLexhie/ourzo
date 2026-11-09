@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
-import { Task, TaskStatus, TaskPriority, User } from '@prisma/client';
+import { Project, Task, TaskStatus, TaskPriority, User } from '@prisma/client';
+
+export type ProjectScope = Pick<
+  Project,
+  'id' | 'workspaceId' | 'status' | 'deletedAt'
+>;
 
 interface TaskWithRelations extends Task {
   assignee: Pick<User, 'id' | 'email' | 'firstName' | 'lastName'> | null;
@@ -192,6 +197,25 @@ export class TasksRepository {
       data: { deletedAt: new Date() },
     });
     return count === 1;
+  }
+
+  /** The parent project of a task, only if it belongs to the workspace. */
+  async findProjectScope(
+    projectId: string,
+    workspaceId: string,
+  ): Promise<ProjectScope | null> {
+    return this.prisma.project.findFirst({
+      where: { id: projectId, workspaceId },
+      select: { id: true, workspaceId: true, status: true, deletedAt: true },
+    });
+  }
+
+  async isProjectMember(projectId: string, userId: string): Promise<boolean> {
+    const membership = await this.prisma.projectMember.findUnique({
+      where: { projectId_userId: { projectId, userId } },
+      select: { id: true },
+    });
+    return membership !== null;
   }
 
   async isAssigneeValid(projectId: string, userId: string): Promise<boolean> {

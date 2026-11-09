@@ -42,6 +42,26 @@ export class OrganizationsRepository {
     });
   }
 
+  async findByIdWithMembers(id: string) {
+    return this.prisma.workspace.findUnique({
+      where: { id },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  }
+
   async findBySlug(slug: string): Promise<Workspace | null> {
     return this.prisma.workspace.findUnique({
       where: { slug },

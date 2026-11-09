@@ -4,7 +4,7 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
+import { MembersRepository } from '@/members/repositories/members.repository';
 import { ApiKeysRepository } from './repositories/api-keys.repository';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
 import {
@@ -37,7 +37,7 @@ export class ApiKeysService {
   private readonly logger = new Logger(ApiKeysService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly membersRepository: MembersRepository,
     private readonly apiKeysRepository: ApiKeysRepository,
     private readonly usageService: UsageService,
     private readonly auditService: AuditService,
@@ -92,9 +92,10 @@ export class ApiKeysService {
     workspaceId: string,
     dto: CreateApiKeyDto,
   ): Promise<CreateApiKeyResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -160,9 +161,10 @@ export class ApiKeysService {
     workspaceId: string,
     keyId: string,
   ): Promise<ApiKeyResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -186,9 +188,10 @@ export class ApiKeysService {
     workspaceId: string,
     keyId: string,
   ): Promise<{ message: string }> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');

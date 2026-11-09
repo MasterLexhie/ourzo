@@ -5,9 +5,10 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
+import { MembersRepository } from '@/members/repositories/members.repository';
 import { AuditService } from '@/audit/audit.service';
 import { UsageService } from '@/usage/usage.service';
+import { NotificationsService } from '@/notifications/notifications.service';
 import { TasksRepository } from './repositories/tasks.repository';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
@@ -62,10 +63,11 @@ export class TasksService {
   private readonly logger = new Logger(TasksService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly membersRepository: MembersRepository,
     private readonly tasksRepository: TasksRepository,
     private readonly auditService: AuditService,
     private readonly usageService: UsageService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -73,18 +75,19 @@ export class TasksService {
     workspaceId: string,
     dto: CreateTaskDto,
   ): Promise<TaskResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
     }
 
-    const project = await this.prisma.project.findFirst({
-      where: { id: dto.projectId, workspaceId },
-      select: { id: true, workspaceId: true, status: true, deletedAt: true },
-    });
+    const project = await this.tasksRepository.findProjectScope(
+      dto.projectId,
+      workspaceId,
+    );
 
     if (!project) {
       throw new NotFoundException('Project not found');
@@ -100,9 +103,10 @@ export class TasksService {
       );
     }
 
-    const isProjectMember = await this.prisma.projectMember.findUnique({
-      where: { projectId_userId: { projectId: dto.projectId, userId } },
-    });
+    const isProjectMember = await this.tasksRepository.isProjectMember(
+      dto.projectId,
+      userId,
+    );
 
     const isWorkspaceAdminOrOwner =
       membership.role === WorkspaceRole.owner ||
@@ -183,18 +187,19 @@ export class TasksService {
       limit?: number;
     },
   ): Promise<TaskListResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
     }
 
-    const project = await this.prisma.project.findFirst({
-      where: { id: projectId, workspaceId },
-      select: { id: true, workspaceId: true, deletedAt: true },
-    });
+    const project = await this.tasksRepository.findProjectScope(
+      projectId,
+      workspaceId,
+    );
 
     if (!project) {
       throw new NotFoundException('Project not found');
@@ -204,9 +209,10 @@ export class TasksService {
       throw new NotFoundException('Project not found');
     }
 
-    const isProjectMember = await this.prisma.projectMember.findUnique({
-      where: { projectId_userId: { projectId, userId } },
-    });
+    const isProjectMember = await this.tasksRepository.isProjectMember(
+      projectId,
+      userId,
+    );
 
     const isWorkspaceAdminOrOwner =
       membership.role === WorkspaceRole.owner ||
@@ -236,9 +242,10 @@ export class TasksService {
     workspaceId: string,
     taskId: string,
   ): Promise<TaskResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -257,18 +264,19 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
-    const project = await this.prisma.project.findFirst({
-      where: { id: task.projectId, workspaceId },
-      select: { id: true, workspaceId: true, deletedAt: true },
-    });
+    const project = await this.tasksRepository.findProjectScope(
+      task.projectId,
+      workspaceId,
+    );
 
     if (!project || project.deletedAt) {
       throw new NotFoundException('Project not found');
     }
 
-    const isProjectMember = await this.prisma.projectMember.findUnique({
-      where: { projectId_userId: { projectId: task.projectId, userId } },
-    });
+    const isProjectMember = await this.tasksRepository.isProjectMember(
+      task.projectId,
+      userId,
+    );
 
     const isWorkspaceAdminOrOwner =
       membership.role === WorkspaceRole.owner ||
@@ -287,9 +295,10 @@ export class TasksService {
     taskId: string,
     dto: UpdateTaskDto,
   ): Promise<TaskResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -308,10 +317,10 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
-    const project = await this.prisma.project.findFirst({
-      where: { id: task.projectId, workspaceId },
-      select: { id: true, workspaceId: true, status: true, deletedAt: true },
-    });
+    const project = await this.tasksRepository.findProjectScope(
+      task.projectId,
+      workspaceId,
+    );
 
     if (!project || project.deletedAt) {
       throw new NotFoundException('Project not found');
@@ -323,9 +332,10 @@ export class TasksService {
       );
     }
 
-    const isProjectMember = await this.prisma.projectMember.findUnique({
-      where: { projectId_userId: { projectId: task.projectId, userId } },
-    });
+    const isProjectMember = await this.tasksRepository.isProjectMember(
+      task.projectId,
+      userId,
+    );
 
     const isWorkspaceAdminOrOwner =
       membership.role === WorkspaceRole.owner ||
@@ -437,9 +447,10 @@ export class TasksService {
     workspaceId: string,
     taskId: string,
   ): Promise<{ message: string }> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -458,10 +469,10 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
-    const project = await this.prisma.project.findFirst({
-      where: { id: task.projectId, workspaceId },
-      select: { id: true, workspaceId: true, deletedAt: true },
-    });
+    const project = await this.tasksRepository.findProjectScope(
+      task.projectId,
+      workspaceId,
+    );
 
     if (!project || project.deletedAt) {
       throw new NotFoundException('Project not found');
@@ -526,14 +537,12 @@ export class TasksService {
     title: string,
     message: string,
   ): Promise<void> {
-    await this.prisma.notification.create({
-      data: {
-        workspaceId,
-        userId,
-        type,
-        title,
-        message,
-      },
+    await this.notificationsService.notify({
+      workspaceId,
+      userId,
+      type,
+      title,
+      message,
     });
   }
 
