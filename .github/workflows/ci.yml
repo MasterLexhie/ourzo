@@ -95,16 +95,17 @@ jobs:
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
 
-      - name: Run database migrations
-        run: pnpm prisma:migrate:deploy
-        working-directory: ./apps/api
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
-
-      - name: Run tests
+      - name: Run tests (API unit + e2e, web)
         run: pnpm test
         env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+          TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+          REDIS_HOST: ${{ env.REDIS_HOST }}
+          REDIS_PORT: ${{ env.REDIS_PORT }}
+
+      - name: Enforce API service coverage (>= 70% lines)
+        run: pnpm --filter ourzo-api test:cov
+        env:
+          TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
           REDIS_HOST: ${{ env.REDIS_HOST }}
           REDIS_PORT: ${{ env.REDIS_PORT }}
 

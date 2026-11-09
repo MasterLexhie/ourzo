@@ -1,18 +1,46 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": [
+    "js",
+    "json",
+    "ts"
+  ],
   "rootDir": "..",
   "testEnvironment": "node",
   "testRegex": "test/.*\\.e2e-spec\\.ts$",
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+    "^.+\\.ts$": "ts-jest",
+    "^.+\\.js$": [
+      "ts-jest",
+      {
+        "tsconfig": {
+          "allowJs": true
+        }
+      }
+    ]
   },
   "transformIgnorePatterns": [
-    "/node_modules/(?!(.pnpm/)?(@nestjs|bcrypt|passport-jwt|ms|jsonwebtoken)/)"
+    "/node_modules/(?!\\.pnpm/|@nestjs/(jwt|passport|mapped-types)/)"
   ],
   "moduleNameMapper": {
-    "^@/(.*)$": "<rootDir>/src/$1",
-    "^@nestjs/jwt$": "<rootDir>/test/__mocks__/nestjs-jwt.mock.ts",
-    "^@nestjs/passport$": "<rootDir>/test/__mocks__/nestjs-passport.mock.ts",
-    "^@nestjs/config$": "<rootDir>/test/__mocks__/nestjs-config.mock.ts"
+    "^@/(.*)$": "<rootDir>/src/$1"
+  },
+  "globalSetup": "<rootDir>/test/setup/global-setup.ts",
+  "setupFiles": [
+    "<rootDir>/test/setup/env.ts"
+  ],
+  "maxWorkers": 1,
+  "testTimeout": 30000,
+  "collectCoverageFrom": [
+    "src/**/*.service.ts"
+  ],
+  "coveragePathIgnorePatterns": [
+    "/node_modules/",
+    "src/prisma/"
+  ],
+  "coverageDirectory": "coverage-e2e",
+  "coverageThreshold": {
+    "global": {
+      "lines": 70
+    }
   }
 }
