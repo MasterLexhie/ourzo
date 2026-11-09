@@ -40,6 +40,28 @@ Authorization answers:
 
 These remain separate concerns.
 
+### Session Tokens (implemented)
+
+| Token | Lifetime | Where it lives |
+|---|---|---|
+| Access token (JWT, `type: access`) | 15 minutes | Memory only (web); `Authorization: Bearer` header |
+| Refresh token (JWT, `type: refresh`) | 7 days | `ourzo_refresh` cookie: `HttpOnly`, `SameSite=Strict`, `Path=/api/auth`, `Secure` in production |
+
+- Refresh tokens are stored server-side as SHA-256 hashes and rotate on every use. A replayed token returns 401.
+- Every token carries a unique `jti`.
+- Logout revokes the session and clears the cookie.
+- See ADR-010.
+
+### CSRF
+
+The only state-changing endpoints that rely on a cookie are `POST /api/auth/refresh` and `POST /api/auth/logout`. Three things protect them:
+
+- The cookie is `SameSite=Strict`, so the browser doesn't send it on cross-site requests.
+- It is scoped to `Path=/api/auth`, so no other route ever receives it.
+- CORS allows credentialed requests only from the exact `ALLOW_ORIGIN` origins.
+
+Every other API route authenticates with a bearer token that a cross-site page cannot obtain.
+
 ---
 
 ## 3. Authorization / RBAC

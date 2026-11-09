@@ -163,6 +163,13 @@ pnpm test
 
 Purpose: Validate application behaviour.
 
+In CI, `pnpm test` runs:
+- API unit tests (Jest)
+- API e2e suites (supertest, run serially against the `ourzo_test` service database via `TEST_DATABASE_URL`)
+- web tests (Vitest + jsdom)
+
+`pnpm --filter ourzo-api test:cov` then fails the job if line coverage of `src/**/*.service.ts` drops below 70%. Turbo passes `TEST_DATABASE_URL`, `REDIS_HOST` and `REDIS_PORT` through to the test task.
+
 ---
 
 ### Build Verification

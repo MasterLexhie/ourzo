@@ -183,6 +183,18 @@ Benefits:
 - Avoids checking unchanged files.
 - Keeps development workflow efficient.
 
+### Implementation
+
+- `pnpm install` runs the root `prepare` script (`husky`), which installs `.husky/pre-commit`. That hook runs `pnpm exec lint-staged`.
+- `lint-staged.config.mjs`:
+
+| Staged files | Checks |
+|---|---|
+| `apps/api/**/*.ts` | `eslint --max-warnings=0` and `prettier --check` |
+| `apps/web/**/*.{ts,tsx}` | `oxlint` (fails on errors) |
+
+- lint-staged is pinned to v16, which supports Node 22.14+. A commit with a lint or formatting violation is rejected.
+
 ---
 
 ## Commit Convention
@@ -262,9 +274,16 @@ Purpose:
 Strict mode applies to:
 
 ```text
-apps/api
-apps/web
+apps/api   (tsconfig.json "strict": true)
+apps/web   (tsconfig.app.json / tsconfig.node.json "strict": true)
 ```
+
+API ESLint rules escalated to `error`:
+- `@typescript-eslint/no-explicit-any`
+- `@typescript-eslint/no-floating-promises`
+- `@typescript-eslint/no-unsafe-argument`
+
+No `eslint-disable` comments remain.
 
 ---
 
@@ -374,11 +393,13 @@ apps/web
 Tools:
 
 ```text
-ESLint
-Prettier
+oxlint
+TypeScript (tsc -b, strict)
 Vitest
-React Testing Library
+React Testing Library (jsdom)
 ```
+
+Prettier is not yet installed for `apps/web`. Adding it needs dependency approval.
 
 ---
 

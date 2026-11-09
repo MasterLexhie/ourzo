@@ -331,6 +331,17 @@ Lint:
 pnpm lint
 ```
 
+Tests (API unit + e2e, web):
+
+```bash
+# e2e suites need a disposable database whose name ends in _test
+docker compose -f docker-compose.dev.yml exec postgres createdb -U ourzo ourzo_test
+export TEST_DATABASE_URL=postgresql://ourzo:dev_password@localhost:5432/ourzo_test
+pnpm test
+```
+
+The e2e harness refuses any database that doesn't end in `_test`, and it checks `current_database()` before truncating tables. Never point it at a development or production database.
+
 Format check (API):
 
 ```bash

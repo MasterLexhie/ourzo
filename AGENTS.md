@@ -137,6 +137,7 @@ Approved technologies:
 | Environment configuration | docs/development/environment-configuration.md |
 | Database tooling | docs/development/database-tooling.md |
 | Code quality setup | docs/development/code-quality-setup.md |
+| API reference | docs/development/api-reference.md |
 | Architecture decision records | docs/architecture/architecture-decision-records.md |
 
 ## Agent Workflow
