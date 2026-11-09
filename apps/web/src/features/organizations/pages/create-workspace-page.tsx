@@ -13,19 +13,15 @@ import { Separator } from "@/components/ui/separator"
 import { useCreateOrganization } from "@/hooks"
 import { PageLayout } from "@/components/layout/page-layout"
 import type { CreateOrganizationDto } from "@/types/organization.types"
+import { SlugInput } from "@/components/slug-input"
+import { finalizeSlug, slugify, SLUG_PATTERN } from "@/lib/slug"
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-}
 
 export function CreateWorkspacePage() {
   const navigate = useNavigate()
   const [error, setError] = useState<string | undefined>()
-  const [slug, setSlug] = useState("")
+  // Auto-generate the slug from the name until the user edits it by hand.
+  const [slugTouched, setSlugTouched] = useState(false)
 
   const { mutateAsync: createOrg, isPending } = useCreateOrganization()
 
@@ -41,20 +37,18 @@ export function CreateWorkspacePage() {
   })
 
   const nameValue = watch("name")
+  const slug = watch("slug")
 
-  // Auto-generate slug from name
   useEffect(() => {
-    if (!slug || slug === slugify(watch("name"))) {
-      const newSlug = slugify(nameValue)
-      setSlug(newSlug)
-      setValue("slug", newSlug)
+    if (!slugTouched) {
+      setValue("slug", slugify(nameValue ?? ""))
     }
-  }, [nameValue, slug, watch, setValue])
+  }, [nameValue, slugTouched, setValue])
 
   const onSubmit = async (data: CreateOrganizationDto) => {
     setError(undefined)
     try {
-      await createOrg({ name: data.name, slug: data.slug })
+      await createOrg({ name: data.name, slug: finalizeSlug(data.slug) })
       navigate("/dashboard")
     } catch (err: unknown) {
       const apiError = err as { response?: { data?: { message?: string } }; message?: string }
@@ -101,32 +95,26 @@ export function CreateWorkspacePage() {
 
               <div className="space-y-2">
                 <Label htmlFor="slug">Slug</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                    ourzo.app/
-                  </span>
-                  <Input
-                    id="slug"
-                    className="pl-20"
-                    placeholder="acme-inc"
-                    value={slug}
-                    onChange={(e) => {
-                      const value = e.target.value
-                        .toLowerCase()
-                        .replace(/[^a-z0-9-]/g, "")
-                        .replace(/--+/g, "-")
-                        .replace(/^-|-$/g, "")
-                      setSlug(value)
-                      setValue("slug", value)
-                    }}
-                    disabled={isPending}
-                    aria-invalid={!!errors.slug}
-                    required
-                    minLength={2}
-                    maxLength={150}
-                    pattern="^[a-z0-9]+(?:-[a-z0-9]+)*$"
-                  />
-                </div>
+                <input
+                  type="hidden"
+                  {...register("slug", {
+                    validate: (value) => {
+                      const finalSlug = finalizeSlug(value)
+                      if (finalSlug.length < 2) return "Slug must be at least 2 characters"
+                      if (!SLUG_PATTERN.test(finalSlug)) return "Use lowercase letters, numbers and dashes"
+                      return true
+                    },
+                  })}
+                />
+                <SlugInput
+                  value={slug}
+                  onChange={(value) => {
+                    setSlugTouched(true)
+                    setValue("slug", value, { shouldValidate: !!errors.slug })
+                  }}
+                  disabled={isPending}
+                  invalid={!!errors.slug}
+                />
                 {errors.slug && (
                   <p className="text-sm text-destructive" role="alert">{errors.slug.message}</p>
                 )}

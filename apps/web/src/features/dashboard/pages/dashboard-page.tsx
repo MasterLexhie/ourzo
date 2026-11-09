@@ -6,10 +6,11 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
-import { Plus, ChevronDown, LayoutDashboard, FolderKanban, Users, Settings, LogOut, Building2 } from "lucide-react"
+import { Plus, ChevronDown, LayoutDashboard, FolderKanban, Users, Settings, LogOut, Building2, BarChart2, FileText } from "lucide-react"
 import { useAuthStore } from "@/stores/auth.store"
 import { useOrganizationStore } from "@/stores/organization.store"
-import { useOrganizations } from "@/hooks"
+import { useOrganizations, useMembers, useProjectTotal, useAuditLogs, useNotifications } from "@/hooks"
+import { RecentActivity } from "../components/recent-activity"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -19,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { NotificationsBell } from "@/components/ui/bell"
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -27,14 +29,22 @@ export function DashboardPage() {
   const { currentOrganization, setCurrentOrganization, setOrganizations, organizations } = useOrganizationStore()
   const { data: fetchedOrgs, isLoading, error: orgsError } = useOrganizations()
 
+  // setOrganizations also reconciles the selected workspace against the list.
   useEffect(() => {
     if (fetchedOrgs) {
       setOrganizations(fetchedOrgs)
-      if (fetchedOrgs.length > 0 && !currentOrganization) {
-        setCurrentOrganization(fetchedOrgs[0])
-      }
     }
-  }, [fetchedOrgs, currentOrganization, setCurrentOrganization, setOrganizations])
+  }, [fetchedOrgs, setOrganizations])
+
+  const workspaceId = currentOrganization?.id ?? ""
+  const { data: members } = useMembers(workspaceId)
+  const { data: projectTotal } = useProjectTotal(workspaceId)
+  const myRole = members?.find((m) => m.userId === user?.id)?.role
+  const canViewAudit = myRole === "owner" || myRole === "admin"
+  const auditQuery = useAuditLogs(canViewAudit ? workspaceId : "", { limit: 5 })
+  const notificationsQuery = useNotifications(myRole && !canViewAudit ? workspaceId : "", { limit: 5 })
+  const memberCount = members?.length ?? currentOrganization?.memberCount ?? 1
+  const projectCount = projectTotal ?? currentOrganization?.projectCount ?? 0
 
   const handleWorkspaceChange = (workspaceId: string) => {
     const org = organizations.find((o) => o.id === workspaceId) ?? fetchedOrgs?.find((o) => o.id === workspaceId)
@@ -128,21 +138,33 @@ export function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Link to="/dashboard/projects">
+            <Link to="/projects">
               <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Projects">
                 <FolderKanban className="h-5 w-5" />
               </Button>
             </Link>
-            <Link to="/dashboard/team">
+            <Link to="/usage">
+              <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Usage">
+                <BarChart2 className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Link to="/audit">
+              <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Audit Logs">
+                <FileText className="h-5 w-5" />
+              </Button>
+            </Link>
+            <Link to="/team">
               <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Team">
                 <Users className="h-5 w-5" />
               </Button>
             </Link>
-            <Link to="/dashboard/settings">
+            <Link to="/settings">
               <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Settings">
                 <Settings className="h-5 w-5" />
               </Button>
             </Link>
+
+            <NotificationsBell />
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -158,7 +180,7 @@ export function DashboardPage() {
                   <p className="text-muted-foreground truncate">{user?.email}</p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/dashboard/profile")}>
+                <DropdownMenuItem onClick={() => navigate("/profile")}>
                   Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
@@ -198,7 +220,7 @@ export function DashboardPage() {
             </Card>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -214,17 +236,17 @@ export function DashboardPage() {
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">Members</dt>
-                    <dd className="font-medium">{currentOrganization.memberCount ?? 1}</dd>
+                    <dd className="font-medium">{memberCount}</dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-muted-foreground">Projects</dt>
-                    <dd className="font-medium">{currentOrganization.projectCount ?? 0}</dd>
+                    <dd className="font-medium">{projectCount}</dd>
                   </div>
                 </dl>
               </CardContent>
             </Card>
 
-            <Link to="/dashboard/projects" className="text-decoration-none text-inherit">
+            <Link to="/projects" className="text-decoration-none text-inherit">
               <Card className="transition-shadow hover:shadow-md cursor-pointer">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -234,14 +256,48 @@ export function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground text-sm">
-                    {currentOrganization.projectCount ?? 0} project{currentOrganization.projectCount !== 1 ? "s" : ""}
+                    {projectCount} project{projectCount !== 1 ? "s" : ""}
                   </p>
                   <p className="text-sm text-primary mt-2">View projects →</p>
                 </CardContent>
               </Card>
             </Link>
 
-            <Link to="/dashboard/team" className="text-decoration-none text-inherit">
+            <Link to="/usage" className="text-decoration-none text-inherit">
+              <Card className="transition-shadow hover:shadow-md cursor-pointer">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart2 className="h-5 w-5 text-primary" />
+                    Usage
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground text-sm">
+                    View resource usage
+                  </p>
+                  <p className="text-sm text-primary mt-2">View usage →</p>
+                </CardContent>
+              </Card>
+            </Link>
+
+            <Link to="/audit" className="text-decoration-none text-inherit">
+              <Card className="transition-shadow hover:shadow-md cursor-pointer">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                    Audit Logs
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground text-sm">
+                    View activity logs
+                  </p>
+                  <p className="text-sm text-primary mt-2">View logs →</p>
+                </CardContent>
+              </Card>
+            </Link>
+
+            <Link to="/team" className="text-decoration-none text-inherit">
               <Card className="transition-shadow hover:shadow-md cursor-pointer">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -251,7 +307,7 @@ export function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground text-sm">
-                    {currentOrganization.memberCount ?? 1} member{currentOrganization.memberCount !== 1 ? "s" : ""}
+                    {memberCount} member{memberCount !== 1 ? "s" : ""}
                   </p>
                   <p className="text-sm text-primary mt-2">Manage team →</p>
                 </CardContent>
@@ -263,11 +319,12 @@ export function DashboardPage() {
         {currentOrganization && (
           <div className="mt-8">
             <h2 className="text-xl font-semibold mb-4">Recent Activity</h2>
-            <Card>
-              <CardContent className="py-8 text-center text-muted-foreground">
-                No recent activity. Create your first project to get started!
-              </CardContent>
-            </Card>
+            <RecentActivity
+              mode={canViewAudit ? "audit" : "notifications"}
+              isLoading={canViewAudit ? auditQuery.isLoading : notificationsQuery.isLoading}
+              auditLogs={auditQuery.data?.auditLogs}
+              notifications={notificationsQuery.data?.notifications}
+            />
           </div>
         )}
       </main>

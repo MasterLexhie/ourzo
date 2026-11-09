@@ -29,13 +29,14 @@ export const useOrganization = (workspaceId: string) => {
 };
 
 export const useCreateOrganization = () => {
-  const { addOrganization } = useOrganizationStore();
+  const { addOrganization, setCurrentOrganization } = useOrganizationStore();
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (dto: CreateOrganizationDto) => organizationsService.create(dto),
     onSuccess: (data) => {
       addOrganization(data);
+      setCurrentOrganization(data);
       queryClient.invalidateQueries({ queryKey: ['organizations'] });
     },
   });

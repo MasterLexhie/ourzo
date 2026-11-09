@@ -1,7 +1,6 @@
 import type { ReactNode } from "react"
 import { Navigate } from "react-router"
 import { useAuthStore } from "@/stores/auth.store"
-import { useOrganizations } from "@/hooks"
 import { useEffect } from "react"
 import { Spinner } from "@/components/ui/spinner"
 
@@ -51,7 +50,6 @@ export function PublicRoute({ children }: { children: ReactNode }) {
 
 export function OnboardingRoute({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading, initializeAuth } = useAuthStore()
-  const { data: orgs } = useOrganizations()
 
   useEffect(() => {
     initializeAuth()
@@ -69,8 +67,12 @@ export function OnboardingRoute({ children }: { children: ReactNode }) {
     return <Navigate to="/login" replace />
   }
 
-  // If user has no organizations, they should be in onboarding
-  if (orgs && orgs.length > 0) {
+  // Check localStorage directly to avoid query dependency on useOrganizations
+  const hasOrgs = typeof window !== 'undefined' &&
+    localStorage.getItem('organization-storage')?.includes('"organizations"') &&
+    JSON.parse(localStorage.getItem('organization-storage')!).state?.organizations?.length > 0
+
+  if (hasOrgs) {
     return <Navigate to="/dashboard" replace />
   }
 

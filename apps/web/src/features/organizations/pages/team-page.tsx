@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +13,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { PageLayout } from "@/components/layout/page-layout";
 import { useMembers, useInvitations, useCreateInvitation, useRevokeInvitation, useUpdateMemberRole, useRemoveMember, useTransferOwnership } from "@/hooks";
 import { useOrganizationStore } from "@/stores/organization.store";
+import { useAuthStore } from "@/stores/auth.store";
 import { cn } from "@/lib/utils";
-import { UserPlus, Mail, X, Shield, Crown, User, Loader2 } from "lucide-react";
+import { UserPlus, Mail, X, Shield, Crown, User, Loader2, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 export type InvitationStatus = "pending" | "accepted" | "expired" | "revoked";
 
@@ -64,6 +66,7 @@ function getStatusBadge(status: InvitationStatus) {
 export function TeamPage() {
   const { currentOrganization } = useOrganizationStore();
   const workspaceId = currentOrganization?.id;
+  const { user } = useAuthStore();
 
   const { data: members, isLoading: membersLoading, error: membersError } = useMembers(workspaceId ?? "");
   const { data: invitations, isLoading: invitationsLoading, error: invitationsError } = useInvitations(workspaceId ?? "");
@@ -76,9 +79,11 @@ export function TeamPage() {
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ type: "remove" | "transfer"; member: Member } | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors },
@@ -86,15 +91,31 @@ export function TeamPage() {
     defaultValues: { email: "", role: "member" },
   });
 
+  const closeInviteModal = () => {
+    setShowInviteModal(false);
+    setInviteUrl(null);
+    reset();
+  };
+
   const onInviteSubmit = async (data: { email: string; role: "owner" | "admin" | "member" }) => {
     if (!workspaceId) return;
     try {
-      await createInvitation.mutateAsync({ workspaceId, dto: data });
-      toast.success("Invitation sent successfully");
-      setShowInviteModal(false);
-      reset();
+      const invitation = await createInvitation.mutateAsync({ workspaceId, dto: data });
+      toast.success("Invitation created");
+      setInviteUrl(invitation.inviteUrl ?? null);
+      if (!invitation.inviteUrl) closeInviteModal();
     } catch {
-      toast.error("Failed to send invitation");
+      toast.error("Failed to create invitation");
+    }
+  };
+
+  const copyInviteUrl = async () => {
+    if (!inviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      toast.success("Invite link copied to clipboard");
+    } catch {
+      toast.error("Could not copy the link. Please copy it manually.");
     }
   };
 
@@ -140,8 +161,11 @@ export function TeamPage() {
     }
   };
 
+  const currentUser = members?.find((m: Member) => m.userId === user?.id);
+  const isOwner = currentUser?.role === "owner";
+  const isAdmin = currentUser?.role === "admin";
+
   const canManageMember = (member: Member) => {
-    const currentUser = members?.find((m: Member) => m.userId === currentOrganization?.id);
     if (!currentUser) return false;
     if (currentUser.role === "owner") return member.userId !== currentUser.userId;
     if (currentUser.role === "admin") return member.role === "member";
@@ -149,14 +173,13 @@ export function TeamPage() {
   };
 
   const canChangeRole = (member: Member, newRole: "owner" | "admin" | "member") => {
-    const currentUser = members?.find((m: Member) => m.userId === currentOrganization?.id);
     if (!currentUser) return false;
     if (currentUser.role === "owner") return true;
     if (currentUser.role === "admin") return newRole === "member" && member.role === "member";
     return false;
   };
 
-  if (membersLoading || invitationsLoading) {
+  if (!workspaceId || membersLoading || invitationsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Spinner size="lg" />
@@ -174,14 +197,11 @@ export function TeamPage() {
     );
   }
 
-  const currentUser = members?.find((m) => m.userId === currentOrganization?.id);
-  const isOwner = currentUser?.role === "owner";
-  const isAdmin = currentUser?.role === "admin";
-
   return (
-    <div className="min-h-screen bg-background">
-      <PageLayout>
-        <div className="space-y-6">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-background">
+        <PageLayout>
+          <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Team</h1>
@@ -340,9 +360,27 @@ export function TeamPage() {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
               <Card className="w-full max-w-md">
                 <CardHeader>
-                  <CardTitle>Invite Team Member</CardTitle>
+                  <CardTitle>{inviteUrl ? "Invitation Link" : "Invite Team Member"}</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {inviteUrl ? (
+                    <div className="space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Share this link with the invitee. They must sign in with the invited email address.
+                        The link expires in 7 days and can only be used once.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Input readOnly value={inviteUrl} aria-label="Invitation link" onFocus={(e) => e.currentTarget.select()} />
+                        <Button type="button" variant="outline" onClick={copyInviteUrl}>
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copy
+                        </Button>
+                      </div>
+                      <div className="flex justify-end pt-2">
+                        <Button type="button" onClick={closeInviteModal}>Done</Button>
+                      </div>
+                    </div>
+                  ) : (
                   <form onSubmit={handleSubmit(onInviteSubmit)} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
@@ -367,43 +405,51 @@ export function TeamPage() {
 
                     <div className="space-y-2">
                       <Label htmlFor="role">Role</Label>
-                      <Select
-                        {...register("role", { required: "Role is required" })}
-                        disabled={createInvitation.isPending}
-                        aria-invalid={!!errors.role}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {roleOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Controller
+                        name="role"
+                        control={control}
+                        rules={{ required: "Role is required" }}
+                        render={({ field }) => (
+                          <Select
+                            value={field.value}
+                            onValueChange={field.onChange}
+                            disabled={createInvitation.isPending}
+                          >
+                            <SelectTrigger id="role" aria-invalid={!!errors.role}>
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {roleOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  {option.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
                       {errors.role && (
                         <p className="text-sm text-destructive" role="alert">{errors.role.message}</p>
                       )}
                     </div>
 
                     <div className="flex gap-2 pt-4">
-                      <Button type="button" variant="outline" onClick={() => { setShowInviteModal(false); reset(); }}>
+                      <Button type="button" variant="outline" onClick={closeInviteModal}>
                         Cancel
                       </Button>
                       <Button type="submit" disabled={createInvitation.isPending} className="flex-1">
                         {createInvitation.isPending ? (
                           <>
                             <Spinner size="sm" className="mr-2" />
-                            Sending...
+                            Creating...
                           </>
                         ) : (
-                          "Send Invitation"
+                          "Create Invitation"
                         )}
                       </Button>
                     </div>
                   </form>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -445,5 +491,6 @@ export function TeamPage() {
         </div>
       </PageLayout>
     </div>
+    </ErrorBoundary>
   );
 }

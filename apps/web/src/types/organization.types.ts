@@ -24,6 +24,11 @@ export interface Invitation {
   updatedAt: string;
 }
 
+/** Returned only to the inviter when an invitation is created. */
+export interface CreateInvitationResponse extends Invitation {
+  inviteUrl: string;
+}
+
 export interface Organization {
   id: string;
   name: string;

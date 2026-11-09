@@ -4,7 +4,7 @@ import type {
   OrganizationListResponse,
   CreateOrganizationDto,
   UpdateOrganizationDto,
-  Invitation,
+  CreateInvitationResponse,
   InvitationListResponse,
   AcceptInvitationResponse,
   CreateInvitationDto,
@@ -41,8 +41,8 @@ export const organizationsService = {
     return apiClient.get<InvitationListResponse>(`/api/invitations`, { workspaceId });
   },
 
-  async createInvitation(workspaceId: string, dto: CreateInvitationDto): Promise<Invitation> {
-    return apiClient.post<Invitation>(`/api/invitations`, dto, { workspaceId });
+  async createInvitation(workspaceId: string, dto: CreateInvitationDto): Promise<CreateInvitationResponse> {
+    return apiClient.post<CreateInvitationResponse>(`/api/invitations`, dto, { workspaceId });
   },
 
   async acceptInvitation(dto: AcceptInvitationDto): Promise<AcceptInvitationResponse> {

@@ -19,8 +19,19 @@ export const useOrganizationStore = create<OrganizationState>()(
       currentOrganization: null,
       organizations: [],
 
+      // The server list is authoritative: a selected workspace the current
+      // user no longer belongs to (or one cached from a previous user) is
+      // dropped in favour of the first workspace they do belong to.
       setOrganizations: (organizations: Organization[]) => {
-        set({ organizations });
+        set((state) => {
+          const current = state.currentOrganization
+            ? organizations.find((o) => o.id === state.currentOrganization?.id)
+            : undefined;
+          return {
+            organizations,
+            currentOrganization: current ?? organizations[0] ?? null,
+          };
+        });
       },
 
       addOrganization: (organization: Organization) => {
@@ -56,11 +67,16 @@ export const useOrganizationStore = create<OrganizationState>()(
 
       clearOrganizations: () => {
         set({ organizations: [], currentOrganization: null });
-      },
+      }
     }),
     {
       name: 'organization-storage',
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        if (state && (state.organizations?.length ?? 0) > 0 && !state.currentOrganization) {
+          state.currentOrganization = state.organizations[0];
+        }
+      },
       partialize: (state) => ({
         currentOrganization: state.currentOrganization,
         organizations: state.organizations,
