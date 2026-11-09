@@ -12,7 +12,11 @@ function refreshCookie(headers: Record<string, unknown>): {
   attributes: string;
 } {
   const raw = headers['set-cookie'];
-  const list = Array.isArray(raw) ? (raw as string[]) : [String(raw ?? '')];
+  const list: string[] = Array.isArray(raw)
+    ? (raw as string[])
+    : typeof raw === 'string'
+      ? [raw]
+      : [];
   const cookie = list.find((c) => c.startsWith(`${COOKIE}=`)) ?? '';
   const pair = cookie.split(';')[0];
   return { pair, value: pair.slice(COOKIE.length + 1), attributes: cookie };
