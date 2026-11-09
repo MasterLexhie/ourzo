@@ -1,0 +1,58 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ourzo-postgres-dev
+    environment:
+      POSTGRES_DB: ourzo_dev
+      POSTGRES_USER: ourzo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_password}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ourzo -d ourzo_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: ourzo-redis-dev
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: builder
+    container_name: ourzo-api-dev
+    working_dir: /app/apps/api
+    command: pnpm dev
+    volumes:
+      - ./apps/api/src:/app/apps/api/src
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://ourzo:${POSTGRES_PASSWORD:-dev_password}@postgres:5432/ourzo_dev?schema=public
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NODE_ENV=development
+    env_file:
+      - ./apps/api/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_dev_data:

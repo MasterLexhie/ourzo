@@ -7,6 +7,20 @@
     },
     "build": {
       "dependsOn": ["^build"]
+    },
+    "docker:build": {
+      "dependsOn": ["build"],
+      "cache": true
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "cache": false
+    },
+    "lint": {
+      "cache": false
+    },
+    "format:check": {
+      "cache": false
     }
   }
 }
