@@ -6,13 +6,16 @@ import {
 } from '@nestjs/common';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { hash, verify } from '@node-rs/bcrypt';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { AuthRepository } from './repositories/auth.repository';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { TokenResponseDto, AuthResponseDto } from './dto/auth-response.dto';
+import {
+  AuthResponseDto,
+  IssuedSession,
+  TokenResponseDto,
+} from './dto/auth-response.dto';
 
 @Injectable()
 export class AuthService {
@@ -24,7 +27,7 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<AuthResponseDto> {
+  async register(dto: RegisterDto): Promise<IssuedSession<AuthResponseDto>> {
     const existingUser = await this.authRepository.findUserByEmail(dto.email);
 
     if (existingUser) {
@@ -40,19 +43,19 @@ export class AuthService {
       lastName: dto.lastName,
     });
 
-    const tokens = this.generateTokens(user.id);
-    await this.storeRefreshToken(user.id, tokens.refreshToken);
+    const session = this.generateTokens(user.id);
+    await this.storeRefreshToken(user.id, session.refreshToken);
 
     this.logger.log(`User registered: ${user.id}`);
 
-    return this.buildAuthResponse(user, tokens);
+    return { ...session, body: this.buildAuthResponse(user, session.body) };
   }
 
   async login(
     dto: LoginDto,
     userAgent?: string,
     ipAddress?: string,
-  ): Promise<AuthResponseDto> {
+  ): Promise<IssuedSession<AuthResponseDto>> {
     const user = await this.authRepository.findUserByEmail(dto.email);
 
     if (!user) {
@@ -70,25 +73,35 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokens = this.generateTokens(user.id);
+    const session = this.generateTokens(user.id);
     await this.storeRefreshToken(
       user.id,
-      tokens.refreshToken,
+      session.refreshToken,
       userAgent,
       ipAddress,
     );
 
     this.logger.log(`User logged in: ${user.id}`);
 
-    return this.buildAuthResponse(user, tokens);
+    return { ...session, body: this.buildAuthResponse(user, session.body) };
   }
 
-  async refresh(dto: RefreshTokenDto): Promise<TokenResponseDto> {
-    const payload = await this.verifyRefreshToken(dto.refreshToken);
+  /**
+   * Rotates a refresh token: the presented token is revoked and a new pair is
+   * issued, so a replayed (stolen) token fails after its first use.
+   */
+  async refresh(
+    refreshToken: string | undefined,
+  ): Promise<IssuedSession<TokenResponseDto>> {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    const payload = await this.verifyRefreshToken(refreshToken);
 
     const storedToken = await this.authRepository.findActiveRefreshToken(
       payload.sub,
-      await this.hashToken(dto.refreshToken),
+      await this.hashToken(refreshToken),
     );
 
     if (!storedToken) {
@@ -97,10 +110,10 @@ export class AuthService {
 
     await this.authRepository.revokeRefreshToken(payload.sub, storedToken.id);
 
-    const tokens = this.generateTokens(payload.sub);
-    await this.storeRefreshToken(payload.sub, tokens.refreshToken);
+    const session = this.generateTokens(payload.sub);
+    await this.storeRefreshToken(payload.sub, session.refreshToken);
 
-    return tokens;
+    return session;
   }
 
   async logout(userId: string, refreshToken?: string): Promise<void> {
@@ -130,14 +143,15 @@ export class AuthService {
     return user;
   }
 
-  private generateTokens(userId: string): TokenResponseDto {
+  private generateTokens(userId: string): IssuedSession<TokenResponseDto> {
     const accessTokenExpiry =
       this.configService.get<string>('JWT_ACCESS_TOKEN_EXPIRY') ?? '15m';
     const refreshTokenExpiry =
       this.configService.get<string>('JWT_REFRESH_TOKEN_EXPIRY') ?? '7d';
 
     const accessToken = this.jwtService.sign(
-      { sub: userId, type: 'access' },
+      // jti makes every token unique, even when issued within the same second.
+      { sub: userId, type: 'access', jti: randomUUID() },
       {
         secret: this.configService.getOrThrow<string>('JWT_SECRET'),
         expiresIn: accessTokenExpiry as JwtSignOptions['expiresIn'],
@@ -145,20 +159,24 @@ export class AuthService {
     );
 
     const refreshToken = this.jwtService.sign(
-      { sub: userId, type: 'refresh' },
+      { sub: userId, type: 'refresh', jti: randomUUID() },
       {
         secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
         expiresIn: refreshTokenExpiry as JwtSignOptions['expiresIn'],
       },
     );
 
-    const expiresIn = this.parseExpiryToSeconds(accessTokenExpiry);
-
     return {
-      accessToken,
+      body: {
+        accessToken,
+        tokenType: 'Bearer',
+        expiresIn: this.parseExpiryToSeconds(accessTokenExpiry),
+      },
       refreshToken,
-      tokenType: 'Bearer',
-      expiresIn,
+      refreshTokenMaxAgeSeconds: this.parseExpiryToSeconds(
+        refreshTokenExpiry,
+        7 * 24 * 60 * 60,
+      ),
     };
   }
 
@@ -188,13 +206,21 @@ export class AuthService {
   private async verifyRefreshToken(
     token: string,
   ): Promise<{ sub: string; type: string }> {
+    let payload: { sub: string; type: string };
     try {
-      return this.jwtService.verify(token, {
+      payload = await this.jwtService.verifyAsync<{
+        sub: string;
+        type: string;
+      }>(token, {
         secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
+    if (payload.type !== 'refresh') {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    return payload;
   }
 
   private async hashPassword(password: string): Promise<string> {
@@ -232,9 +258,9 @@ export class AuthService {
     return Promise.resolve(createHash('sha256').update(token).digest('hex'));
   }
 
-  private parseExpiryToSeconds(expiry: string): number {
+  private parseExpiryToSeconds(expiry: string, fallback = 900): number {
     const match = expiry.match(/^(\d+)([smhd])$/);
-    if (!match) return 900;
+    if (!match) return fallback;
     const value = parseInt(match[1], 10);
     const unit = match[2];
     switch (unit) {
@@ -247,7 +273,7 @@ export class AuthService {
       case 'd':
         return value * 24 * 60 * 60;
       default:
-        return 900;
+        return fallback;
     }
   }
 

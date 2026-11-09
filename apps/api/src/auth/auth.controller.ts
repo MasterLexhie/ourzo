@@ -8,7 +8,11 @@ import {
   UseGuards,
   Ip,
   Headers,
+  Req,
+  Res,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import type { Request, Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -19,9 +23,18 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { AuthResponseDto, TokenResponseDto } from './dto/auth-response.dto';
+import {
+  AuthResponseDto,
+  IssuedSession,
+  TokenResponseDto,
+} from './dto/auth-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
+import {
+  clearRefreshCookie,
+  readRefreshCookie,
+  setRefreshCookie,
+} from './utils/refresh-cookie';
 import { RateLimitGuard } from '@/rate-limit/rate-limit.guard';
 import { RateLimit } from '@/rate-limit/decorators/rate-limit.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -38,7 +51,25 @@ interface AuthenticatedUser {
 @ApiTags('Authentication')
 @Controller('api/auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  private get secureCookies(): boolean {
+    return this.configService.get<string>('NODE_ENV') === 'production';
+  }
+
+  /** Puts the refresh token in the httpOnly cookie and returns the public body. */
+  private deliver<T>(response: Response, session: IssuedSession<T>): T {
+    setRefreshCookie(
+      response,
+      session.refreshToken,
+      session.refreshTokenMaxAgeSeconds,
+      this.secureCookies,
+    );
+    return session.body;
+  }
 
   @Public()
   @Post('register')
@@ -52,8 +83,11 @@ export class AuthController {
   })
   @ApiResponse({ status: 409, description: 'Email already registered' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  async register(@Body() dto: RegisterDto): Promise<AuthResponseDto> {
-    return this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<AuthResponseDto> {
+    return this.deliver(response, await this.authService.register(dto));
   }
 
   @Public()
@@ -73,8 +107,12 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Headers('user-agent') userAgent: string,
     @Ip() ipAddress: string,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<AuthResponseDto> {
-    return this.authService.login(dto, userAgent, ipAddress);
+    return this.deliver(
+      response,
+      await this.authService.login(dto, userAgent, ipAddress),
+    );
   }
 
   @Public()
@@ -82,7 +120,10 @@ export class AuthController {
   @UseGuards(RateLimitGuard)
   @RateLimit('auth')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  @ApiOperation({
+    summary:
+      'Rotate the refresh token (httpOnly cookie) and issue a new access token',
+  })
   @ApiResponse({
     status: 200,
     description: 'Token refreshed successfully',
@@ -90,8 +131,14 @@ export class AuthController {
   })
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  async refresh(@Body() dto: RefreshTokenDto): Promise<TokenResponseDto> {
-    return this.authService.refresh(dto);
+  async refresh(
+    @Body() dto: RefreshTokenDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<TokenResponseDto> {
+    // Cookie first; the body field is a deprecated one-release fallback.
+    const refreshToken = readRefreshCookie(request) ?? dto.refreshToken;
+    return this.deliver(response, await this.authService.refresh(refreshToken));
   }
 
   @UseGuards(JwtAuthGuard)
@@ -103,9 +150,13 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async logout(
     @CurrentUser() user: { id: string },
-    @Body() body: { refreshToken?: string },
+    @Body() dto: RefreshTokenDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
   ): Promise<{ message: string }> {
-    await this.authService.logout(user.id, body.refreshToken);
+    const refreshToken = readRefreshCookie(request) ?? dto.refreshToken;
+    await this.authService.logout(user.id, refreshToken);
+    clearRefreshCookie(response, this.secureCookies);
     return { message: 'Logged out successfully' };
   }
 

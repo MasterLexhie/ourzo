@@ -1,6 +1,7 @@
 const API_BASE_URL: string = import.meta.env.VITE_API_URL;
 
 import {useAuthStore} from '@/stores/auth.store';
+import type { Tokens } from '@/types/auth.types';
 
 interface QueuedRequest {
   resolve: (value: unknown) => void;
@@ -9,15 +10,9 @@ interface QueuedRequest {
   options: RequestInit & { workspaceId?: string };
 }
 
-function getAuthTokens() {
-  return useAuthStore.getState().tokens;
-}
-
-function setAuthTokens(tokens: any) {
-  const user = useAuthStore.getState().user;
-  if (user) {
-    useAuthStore.setState({tokens});
-  }
+/** Keeps the in-memory token copy in the auth store (never persisted). */
+function storeAccessToken(tokens: Tokens) {
+  useAuthStore.setState({ tokens });
 }
 
 class ApiClient {
@@ -35,41 +30,34 @@ class ApiClient {
     this.accessToken = token;
   }
 
-  private async refreshAccessToken(): Promise<string> {
+  /**
+   * Exchanges the httpOnly refresh cookie for a new access token (the
+   * server rotates the cookie). The refresh token is never readable by JS.
+   */
+  async refreshAccessToken(): Promise<string> {
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
 
-    const tokens = getAuthTokens();
-
-    if (!tokens?.refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
     this.refreshPromise = (async () => {
-      const response = await fetch(`${this.baseUrl}/api/auth/refresh`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({refreshToken: tokens.refreshToken}),
-      });
+      try {
+        const response = await fetch(`${this.baseUrl}/api/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        });
 
-      if (!response.ok) {
-        throw new Error('Token refresh failed');
+        if (!response.ok) {
+          throw new ApiError(response.status, 'Session expired', null);
+        }
+
+        const tokens = (await response.json()) as Tokens;
+        this.accessToken = tokens.accessToken;
+        storeAccessToken(tokens);
+        return tokens.accessToken;
+      } finally {
+        this.refreshPromise = null;
       }
-
-      const data = await response.json();
-      const newTokens = {
-        accessToken: data.accessToken,
-        refreshToken: data.refreshToken,
-        tokenType: data.tokenType,
-        expiresIn: data.expiresIn,
-      };
-
-      setAuthTokens(newTokens);
-
-      return newTokens.accessToken;
     })();
 
     return this.refreshPromise;
@@ -90,9 +78,10 @@ class ApiClient {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           };
-          const fetchOptions = {
+          const fetchOptions: RequestInit = {
             ...queued.options,
             headers,
+            credentials: 'include',
           };
           const response = await fetch(`${this.baseUrl}${queued.endpoint}`, fetchOptions);
 
@@ -135,10 +124,13 @@ class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...fetchOptions,
       headers,
+      credentials: 'include',
     });
 
     if (!response.ok) {
-      if (response.status === 401 && this.accessToken) {
+      // Auth endpoints report their own 401s (e.g. wrong password); never
+      // try to refresh in response to them.
+      if (response.status === 401 && this.accessToken && !endpoint.startsWith('/api/auth/')) {
         return this.handle401<T>(endpoint, {...fetchOptions, headers}, workspaceId);
       }
 
@@ -186,6 +178,7 @@ class ApiClient {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         ...options,
         headers,
+        credentials: 'include',
       });
 
       if (!response.ok) {

@@ -6,9 +6,9 @@ export interface User {
   emailVerifiedAt: string | null;
 }
 
+/** Access token only: the refresh token lives in an httpOnly cookie. */
 export interface Tokens {
   accessToken: string;
-  refreshToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
 }
@@ -20,7 +20,6 @@ export interface AuthResponse {
 
 export interface TokenResponse {
   accessToken: string;
-  refreshToken: string;
   tokenType: 'Bearer';
   expiresIn: number;
 }
@@ -37,6 +36,3 @@ export interface LoginDto {
   password: string;
 }
 
-export interface RefreshTokenDto {
-  refreshToken: string;
-}

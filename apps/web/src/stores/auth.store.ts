@@ -56,51 +56,29 @@ const useAuthStore = create<AuthState>()(
       },
 
       initializeAuth: async () => {
-        const { tokens, _initializeAuthPromise } = get();
+        const { user, _initializeAuthPromise } = get();
 
         // Return existing promise if initialization is already in progress
         if (_initializeAuthPromise) {
           return _initializeAuthPromise;
         }
 
-        if (!tokens?.accessToken) {
+        // No remembered user means no session to restore.
+        if (!user) {
           set({ isLoading: false });
           return;
         }
 
         const initPromise = (async () => {
           try {
-            apiClient.setAccessToken(tokens.accessToken);
-
+            // Tokens are never persisted: restore the session from the
+            // httpOnly refresh cookie, then load the user.
+            await apiClient.refreshAccessToken();
             const user = await apiClient.get<User>('/api/auth/me');
             set({ user, isAuthenticated: true, isLoading: false });
           } catch {
-            // Token might be expired, try to refresh
-            const currentTokens = get().tokens;
-            if (currentTokens?.refreshToken) {
-              try {
-                const response = await apiClient.post<{ accessToken: string; refreshToken: string; tokenType: 'Bearer'; expiresIn: number }>(
-                  '/api/auth/refresh',
-                  { refreshToken: currentTokens.refreshToken },
-                );
-                const newTokens = {
-                  accessToken: response.accessToken,
-                  refreshToken: response.refreshToken,
-                  tokenType: response.tokenType,
-                  expiresIn: response.expiresIn,
-                };
-                apiClient.setAccessToken(newTokens.accessToken);
-                const user = await apiClient.get<User>('/api/auth/me');
-                set({ user, tokens: newTokens, isAuthenticated: true, isLoading: false });
-              } catch {
-                // Refresh failed, clear auth
-                get().clearAuth();
-              }
-            } else {
-              get().clearAuth();
-            }
+            get().clearAuth();
           } finally {
-            // Clear the promise so future calls can retry
             set({ _initializeAuthPromise: null });
           }
         })();
@@ -112,11 +90,12 @@ const useAuthStore = create<AuthState>()(
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({
-        user: state.user,
-        tokens: state.tokens,
-        isAuthenticated: state.isAuthenticated,
+      // Only the user profile is persisted; tokens stay in memory (ADR-010).
+      version: 1,
+      migrate: (persisted) => ({
+        user: (persisted as { user?: User | null } | undefined)?.user ?? null,
       }),
+      partialize: (state) => ({ user: state.user }),
     },
   ),
 );

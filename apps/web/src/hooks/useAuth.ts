@@ -30,11 +30,11 @@ export const useLogin = () => {
 };
 
 export const useLogout = () => {
-  const { clearAuth, tokens } = useAuthStore();
+  const { clearAuth } = useAuthStore();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => authService.logout(tokens?.refreshToken),
+    mutationFn: () => authService.logout(),
     onSuccess: () => {
       clearAuth();
       queryClient.clear();

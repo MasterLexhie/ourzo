@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Spinner } from "@/components/ui/spinner"
 import { Plus, ChevronDown, LayoutDashboard, FolderKanban, Users, Settings, LogOut, Building2, BarChart2, FileText } from "lucide-react"
 import { useAuthStore } from "@/stores/auth.store"
+import { authService } from "@/services"
 import { useOrganizationStore } from "@/stores/organization.store"
 import { useOrganizations, useMembers, useProjectTotal, useAuditLogs, useNotifications } from "@/hooks"
 import { RecentActivity } from "../components/recent-activity"
@@ -25,7 +26,7 @@ import { NotificationsBell } from "@/components/ui/bell"
 export function DashboardPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const { user, clearAuth, tokens } = useAuthStore()
+  const { user, clearAuth } = useAuthStore()
   const { currentOrganization, setCurrentOrganization, setOrganizations, organizations } = useOrganizationStore()
   const { data: fetchedOrgs, isLoading, error: orgsError } = useOrganizations()
 
@@ -59,14 +60,7 @@ export function DashboardPage() {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${tokens?.accessToken}`,
-        },
-        body: JSON.stringify({ refreshToken: tokens?.refreshToken }),
-      })
+      await authService.logout()
     } catch {
       // Ignore server errors on logout
     } finally {
