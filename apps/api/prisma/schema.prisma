@@ -29,8 +29,8 @@ enum ProjectStatus {
 enum TaskStatus {
   todo
   in_progress
+  blocked
   completed
-  cancelled
 }
 
 enum TaskPriority {

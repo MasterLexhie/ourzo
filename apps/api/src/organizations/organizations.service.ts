@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
+import { AuditService } from '@/audit/audit.service';
 import { OrganizationsRepository } from './repositories/organizations.repository';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
@@ -51,6 +52,7 @@ export class OrganizationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly organizationsRepository: OrganizationsRepository,
+    private readonly auditService: AuditService,
   ) {}
 
   async create(
@@ -66,6 +68,15 @@ export class OrganizationsService {
       name: dto.name,
       slug: dto.slug,
       ownerId: userId,
+    });
+
+    await this.auditService.record({
+      workspaceId: workspace.id,
+      actorId: userId,
+      action: 'workspace.created',
+      resourceType: 'workspace',
+      resourceId: workspace.id,
+      metadata: { name: workspace.name, slug: workspace.slug },
     });
 
     this.logger.log(`Organization created: ${workspace.id} by user: ${userId}`);
@@ -160,6 +171,22 @@ export class OrganizationsService {
     }
 
     await this.organizationsRepository.update(workspaceId, dto);
+
+    const changes: Record<string, { from: string; to: string }> = {};
+    if (dto.name !== undefined && dto.name !== workspace.name) {
+      changes.name = { from: workspace.name, to: dto.name };
+    }
+    if (dto.slug !== undefined && dto.slug !== workspace.slug) {
+      changes.slug = { from: workspace.slug, to: dto.slug };
+    }
+    await this.auditService.record({
+      workspaceId,
+      actorId: userId,
+      action: 'workspace.updated',
+      resourceType: 'workspace',
+      resourceId: workspaceId,
+      metadata: { changes },
+    });
     this.logger.log(`Organization updated: ${workspaceId} by user: ${userId}`);
 
     return this.findOne(userId, workspaceId);
@@ -185,6 +212,15 @@ export class OrganizationsService {
     }
 
     await this.organizationsRepository.softDelete(workspaceId);
+
+    await this.auditService.record({
+      workspaceId,
+      actorId: userId,
+      action: 'workspace.deleted',
+      resourceType: 'workspace',
+      resourceId: workspaceId,
+      metadata: { name: workspace.name, slug: workspace.slug },
+    });
     this.logger.log(
       `Organization soft deleted: ${workspaceId} by user: ${userId}`,
     );

@@ -33,6 +33,18 @@ export class InvitationResponseDto {
   updatedAt: Date;
 }
 
+/**
+ * Returned only to the Owner/Admin who creates the invitation. The link embeds
+ * the single-use token, so it is never included in list responses.
+ */
+export class CreateInvitationResponseDto extends InvitationResponseDto {
+  @ApiProperty({
+    example: 'http://localhost:5173/accept-invitation?token=…',
+    description: 'Shareable link the invitee opens to accept the invitation',
+  })
+  inviteUrl: string;
+}
+
 export class InvitationListResponseDto {
   @ApiProperty({ type: [InvitationResponseDto] })
   invitations: InvitationResponseDto[];

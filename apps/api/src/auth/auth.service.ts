@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { hash, verify } from '@node-rs/bcrypt';
+import { createHash } from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
@@ -61,6 +62,7 @@ export class AuthService {
     });
 
     if (!user) {
+      this.logFailedLogin(dto.email, 'unknown_user');
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -70,6 +72,7 @@ export class AuthService {
     );
 
     if (!isPasswordValid) {
+      this.logFailedLogin(dto.email, 'bad_password');
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -239,11 +242,25 @@ export class AuthService {
     return verify(password, hash);
   }
 
-  private async hashToken(token: string): Promise<string> {
-    const rounds = Number(
-      this.configService.get<number>('BCRYPT_ROUNDS') ?? 12,
-    );
-    return hash(token, rounds);
+  /**
+   * Refresh tokens are high-entropy JWTs, so a deterministic SHA-256 digest is
+   * sufficient and, unlike salted bcrypt, allows lookup by hash.
+   */
+  /**
+   * Failed logins have no tenant, so they go to the app log rather than the
+   * workspace audit log. The email is pseudonymised and no IP or credential
+   * values are written.
+   */
+  private logFailedLogin(email: string, reason: string): void {
+    const emailRef = createHash('sha256')
+      .update(email.trim().toLowerCase())
+      .digest('hex')
+      .slice(0, 12);
+    this.logger.warn(`Failed login (${reason}) emailRef=${emailRef}`);
+  }
+
+  private hashToken(token: string): Promise<string> {
+    return Promise.resolve(createHash('sha256').update(token).digest('hex'));
   }
 
   private parseExpiryToSeconds(expiry: string): number {

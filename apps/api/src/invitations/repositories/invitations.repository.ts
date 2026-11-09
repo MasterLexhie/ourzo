@@ -153,34 +153,44 @@ export class InvitationsRepository {
     });
   }
 
+  async findById(id: string, workspaceId: string): Promise<Invitation | null> {
+    return this.prisma.invitation.findFirst({
+      where: { id, workspaceId },
+    });
+  }
+
   async updateStatus(
     id: string,
+    workspaceId: string,
     status: InvitationStatus,
     acceptedAt?: Date,
-  ): Promise<Invitation> {
-    return this.prisma.invitation.update({
-      where: { id },
+  ): Promise<boolean> {
+    const { count } = await this.prisma.invitation.updateMany({
+      where: { id, workspaceId },
       data: {
         status,
         acceptedAt,
         updatedAt: new Date(),
       },
     });
+    return count === 1;
   }
 
-  async revoke(id: string): Promise<Invitation> {
-    return this.prisma.invitation.update({
-      where: { id },
+  async revoke(id: string, workspaceId: string): Promise<boolean> {
+    const { count } = await this.prisma.invitation.updateMany({
+      where: { id, workspaceId, status: InvitationStatus.pending },
       data: {
         status: InvitationStatus.revoked,
         updatedAt: new Date(),
       },
     });
+    return count === 1;
   }
 
-  async delete(id: string): Promise<void> {
-    await this.prisma.invitation.delete({
-      where: { id },
+  async delete(id: string, workspaceId: string): Promise<boolean> {
+    const { count } = await this.prisma.invitation.deleteMany({
+      where: { id, workspaceId },
     });
+    return count === 1;
   }
 }

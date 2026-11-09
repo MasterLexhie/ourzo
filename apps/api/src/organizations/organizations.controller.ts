@@ -25,6 +25,8 @@ import {
   OrganizationListResponseDto,
 } from './dto/organization-response.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+import { RateLimitGuard } from '@/rate-limit/rate-limit.guard';
+import { RateLimit } from '@/rate-limit/decorators/rate-limit.decorator';
 import { WorkspaceContextGuard } from '@/authorization/guards/workspace-context.guard';
 import { WorkspaceRolesGuard } from '@/authorization/guards/workspace-roles.guard';
 import { WorkspaceRoles } from '@/authorization/decorators/workspace-roles.decorator';
@@ -33,7 +35,8 @@ import { WorkspaceRole } from '@/authorization/roles';
 
 @ApiTags('Organizations')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RateLimitGuard)
+@RateLimit('user')
 @Controller('api/organizations')
 export class OrganizationsController {
   constructor(private readonly organizationsService: OrganizationsService) {}

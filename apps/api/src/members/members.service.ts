@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
+import { AuditService } from '@/audit/audit.service';
 import { MembersRepository } from './repositories/members.repository';
 import {
   UpdateMemberRoleDto,
@@ -41,6 +42,7 @@ export class MembersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly membersRepository: MembersRepository,
+    private readonly auditService: AuditService,
   ) {}
 
   async findAllForWorkspace(
@@ -308,15 +310,13 @@ export class MembersService {
     resourceId: string,
     metadata: AuditMetadata,
   ): Promise<void> {
-    await this.prisma.auditLog.create({
-      data: {
-        workspaceId,
-        actorId,
-        action,
-        resourceType,
-        resourceId,
-        metadata,
-      },
+    await this.auditService.record({
+      workspaceId,
+      actorId,
+      action,
+      resourceType,
+      resourceId,
+      metadata: metadata as Record<string, unknown>,
     });
   }
 
@@ -329,16 +329,17 @@ export class MembersService {
     resourceId: string,
     metadata: AuditMetadata,
   ): Promise<void> {
-    await tx.auditLog.create({
-      data: {
+    await this.auditService.record(
+      {
         workspaceId,
         actorId,
         action,
         resourceType,
         resourceId,
-        metadata,
+        metadata: metadata as Record<string, unknown>,
       },
-    });
+      tx,
+    );
   }
 
   private mapToResponse(member: MemberWithUser): MemberResponseDto {

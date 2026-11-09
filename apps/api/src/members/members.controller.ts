@@ -26,7 +26,11 @@ import {
   MemberResponseDto,
   MemberListResponseDto,
 } from './dto/member-response.dto';
-import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+import { JwtOrApiKeyGuard } from '@/api-keys/guards/jwt-or-api-key.guard';
+import { ApiKeyScopesGuard } from '@/api-keys/guards/api-key-scopes.guard';
+import { RequireScopes } from '@/api-keys/decorators/require-scopes.decorator';
+import { RateLimitGuard } from '@/rate-limit/rate-limit.guard';
+import { RateLimit } from '@/rate-limit/decorators/rate-limit.decorator';
 import { WorkspaceContextGuard } from '@/authorization/guards/workspace-context.guard';
 import { WorkspaceRolesGuard } from '@/authorization/guards/workspace-roles.guard';
 import { WorkspaceRoles } from '@/authorization/decorators/workspace-roles.decorator';
@@ -38,12 +42,14 @@ import { WorkspaceRole } from '@/authorization/roles';
 
 @ApiTags('Members')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtOrApiKeyGuard, ApiKeyScopesGuard, RateLimitGuard)
+@RateLimit('user')
 @Controller('api/members')
 export class MembersController {
   constructor(private readonly membersService: MembersService) {}
 
   @Get()
+  @RequireScopes('members:read')
   @UseGuards(WorkspaceContextGuard)
   @ApiOperation({ summary: 'List all members of the workspace' })
   @ApiResponse({

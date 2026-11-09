@@ -22,6 +22,8 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthResponseDto, TokenResponseDto } from './dto/auth-response.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
+import { RateLimitGuard } from '@/rate-limit/rate-limit.guard';
+import { RateLimit } from '@/rate-limit/decorators/rate-limit.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 
 @ApiTags('Authentication')
@@ -31,6 +33,8 @@ export class AuthController {
 
   @Public()
   @Post('register')
+  @UseGuards(RateLimitGuard)
+  @RateLimit('auth')
   @ApiOperation({ summary: 'Register a new user' })
   @ApiResponse({
     status: 201,
@@ -45,6 +49,8 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @UseGuards(RateLimitGuard)
+  @RateLimit('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({
@@ -64,6 +70,8 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
+  @UseGuards(RateLimitGuard)
+  @RateLimit('auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiResponse({

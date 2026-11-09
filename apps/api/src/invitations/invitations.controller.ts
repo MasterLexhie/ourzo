@@ -20,11 +20,13 @@ import { InvitationsService } from './invitations.service';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import {
-  InvitationResponseDto,
+  CreateInvitationResponseDto,
   InvitationListResponseDto,
   AcceptInvitationResponseDto,
 } from './dto/invitation-response.dto';
 import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+import { RateLimitGuard } from '@/rate-limit/rate-limit.guard';
+import { RateLimit } from '@/rate-limit/decorators/rate-limit.decorator';
 import { WorkspaceContextGuard } from '@/authorization/guards/workspace-context.guard';
 import { WorkspaceRolesGuard } from '@/authorization/guards/workspace-roles.guard';
 import { WorkspaceRoles } from '@/authorization/decorators/workspace-roles.decorator';
@@ -36,7 +38,8 @@ import { WorkspaceRole } from '@/authorization/roles';
 
 @ApiTags('Invitations')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RateLimitGuard)
+@RateLimit('user')
 @Controller('api/invitations')
 export class InvitationsController {
   constructor(private readonly invitationsService: InvitationsService) {}
@@ -48,8 +51,9 @@ export class InvitationsController {
   @ApiOperation({ summary: 'Create a new invitation' })
   @ApiResponse({
     status: 201,
-    description: 'Invitation created successfully',
-    type: InvitationResponseDto,
+    description:
+      'Invitation created successfully. Includes a one-time inviteUrl for the inviter to share.',
+    type: CreateInvitationResponseDto,
   })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   @ApiResponse({
@@ -62,7 +66,7 @@ export class InvitationsController {
     @CurrentUser() user: { id: string },
     @CurrentWorkspaceMembership() membership: { workspaceId: string },
     @Body() dto: CreateInvitationDto,
-  ): Promise<InvitationResponseDto> {
+  ): Promise<CreateInvitationResponseDto> {
     return this.invitationsService.create(user.id, membership.workspaceId, dto);
   }
 

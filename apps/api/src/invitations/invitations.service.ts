@@ -6,12 +6,16 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '@/prisma/prisma.service';
+import { AuditService } from '@/audit/audit.service';
+import { UsageService } from '@/usage/usage.service';
 import { InvitationsRepository } from './repositories/invitations.repository';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { AcceptInvitationDto } from './dto/accept-invitation.dto';
 import {
   InvitationResponseDto,
+  CreateInvitationResponseDto,
   InvitationListResponseDto,
   AcceptInvitationResponseDto,
 } from './dto/invitation-response.dto';
@@ -54,13 +58,16 @@ export class InvitationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invitationsRepository: InvitationsRepository,
+    private readonly configService: ConfigService,
+    private readonly auditService: AuditService,
+    private readonly usageService: UsageService,
   ) {}
 
   async create(
     userId: string,
     workspaceId: string,
     dto: CreateInvitationDto,
-  ): Promise<InvitationResponseDto> {
+  ): Promise<CreateInvitationResponseDto> {
     const membership = await this.prisma.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId, userId } },
     });
@@ -100,6 +107,8 @@ export class InvitationsService {
       );
     }
 
+    await this.usageService.assertWithinLimit(workspaceId, 'members');
+
     const expiresAt = addDays(new Date(), this.EXPIRY_DAYS);
 
     const invitation = await this.invitationsRepository.create({
@@ -123,10 +132,20 @@ export class InvitationsService {
     );
 
     this.logger.log(
-      `Invitation created: ${invitation.id} for ${dto.email} in workspace ${workspaceId}`,
+      `Invitation created: ${invitation.id} in workspace ${workspaceId}`,
     );
 
-    return this.mapToResponse(invitation as InvitationWithRelations);
+    return {
+      ...this.mapToResponse(invitation as InvitationWithRelations),
+      inviteUrl: this.buildInviteUrl(invitation.token),
+    };
+  }
+
+  private buildInviteUrl(token: string): string {
+    const webAppUrl = (
+      this.configService.get<string>('WEB_APP_URL') ?? 'http://localhost:5173'
+    ).replace(/\/+$/, '');
+    return `${webAppUrl}/accept-invitation?token=${encodeURIComponent(token)}`;
   }
 
   async findAllForWorkspace(
@@ -177,6 +196,7 @@ export class InvitationsService {
     if (invitation.expiresAt < new Date()) {
       await this.invitationsRepository.updateStatus(
         invitation.id,
+        invitation.workspaceId,
         InvitationStatus.expired,
       );
       throw new BadRequestException('Invitation has expired');
@@ -209,11 +229,17 @@ export class InvitationsService {
     if (existingMembership) {
       await this.invitationsRepository.updateStatus(
         invitation.id,
+        invitation.workspaceId,
         InvitationStatus.accepted,
         new Date(),
       );
       throw new ConflictException('User is already a member of this workspace');
     }
+
+    await this.usageService.assertWithinLimit(
+      invitation.workspaceId,
+      'members',
+    );
 
     await this.prisma.$transaction(async (tx) => {
       await tx.workspaceMember.create({
@@ -226,6 +252,7 @@ export class InvitationsService {
 
       await this.invitationsRepository.updateStatus(
         invitation.id,
+        invitation.workspaceId,
         InvitationStatus.accepted,
         new Date(),
       );
@@ -275,25 +302,26 @@ export class InvitationsService {
       );
     }
 
-    const invitation = await this.prisma.invitation.findUnique({
-      where: { id: invitationId },
-    });
+    const invitation = await this.invitationsRepository.findById(
+      invitationId,
+      workspaceId,
+    );
 
     if (!invitation) {
       throw new NotFoundException('Invitation not found');
-    }
-
-    if (invitation.workspaceId !== workspaceId) {
-      throw new ForbiddenException(
-        'Invitation does not belong to this workspace',
-      );
     }
 
     if (invitation.status !== InvitationStatus.pending) {
       throw new BadRequestException('Only pending invitations can be revoked');
     }
 
-    await this.invitationsRepository.revoke(invitationId);
+    const revoked = await this.invitationsRepository.revoke(
+      invitationId,
+      workspaceId,
+    );
+    if (!revoked) {
+      throw new BadRequestException('Only pending invitations can be revoked');
+    }
 
     await this.createAuditLog(
       workspaceId,
@@ -319,15 +347,13 @@ export class InvitationsService {
     resourceId: string,
     metadata: AuditMetadata,
   ): Promise<void> {
-    await this.prisma.auditLog.create({
-      data: {
-        workspaceId,
-        actorId,
-        action,
-        resourceType,
-        resourceId,
-        metadata,
-      },
+    await this.auditService.record({
+      workspaceId,
+      actorId,
+      action,
+      resourceType,
+      resourceId,
+      metadata: metadata as Record<string, unknown>,
     });
   }
 
@@ -340,16 +366,17 @@ export class InvitationsService {
     resourceId: string,
     metadata: AuditMetadata,
   ): Promise<void> {
-    await tx.auditLog.create({
-      data: {
+    await this.auditService.record(
+      {
         workspaceId,
         actorId,
         action,
         resourceType,
         resourceId,
-        metadata,
+        metadata: metadata as Record<string, unknown>,
       },
-    });
+      tx,
+    );
   }
 
   private mapToResponse(
