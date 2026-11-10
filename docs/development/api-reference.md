@@ -94,4 +94,4 @@ Status is one of `todo`, `in_progress`, `blocked` or `completed`. Priority is on
 | `GET /api/audit` (`?action=&resourceType=&actorId=&startDate=&endDate=`) | Owner, Admin | `audit:read` |
 | `GET /api/notifications`, `PATCH /api/notifications/:id/read`, `PATCH /api/notifications/read-all` | the recipient (JWT only) | — |
 | `POST/GET/DELETE /api/api-keys…` | Owner (JWT only) | — |
-| `GET /health` | public | — |
+| `GET /health` (200 only when PostgreSQL answers a query and Redis answers PING; otherwise 503 with the failing check marked `down`) | public | — |

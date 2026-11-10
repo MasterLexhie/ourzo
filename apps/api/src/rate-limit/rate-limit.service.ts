@@ -33,12 +33,14 @@ export class RateLimitService {
       host: redisHost,
       port: redisPort,
       maxRetriesPerRequest: 3,
+      // Never stop reconnecting: returning null would leave rate limiting (and
+      // the fail-closed auth routes) broken until the API restarts, even after
+      // Redis comes back. Requests still fail fast via maxRetriesPerRequest.
       retryStrategy: (times: number) => {
-        if (times > 3) {
-          this.logger.error('Redis connection failed after 3 retries');
-          return null;
+        if (times === 4) {
+          this.logger.error('Redis unavailable; still retrying');
         }
-        return Math.min(times * 200, 2000);
+        return Math.min(times * 200, 5000);
       },
       lazyConnect: true,
     });
