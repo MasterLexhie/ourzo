@@ -112,3 +112,7 @@ Start with:
 - `docs/architecture/security-architecture.md`
 - `docs/development/development-setup.md`
 - `docs/development/api-reference.md`
+
+## License
+
+Ourzo is open source under the [MIT License](LICENSE).
