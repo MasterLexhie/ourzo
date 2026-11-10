@@ -485,6 +485,16 @@ Frontend responsibilities:
 - Handle session expiration.
 - Redirect unauthenticated users.
 
+Token handling (ADR-010):
+
+- The **access token lives in memory only**: the `apiClient` and the non-persisted `tokens` field of `auth.store`.
+- `auth-storage` in `localStorage` holds only the user profile. Store version 1 drops tokens left there by older builds.
+- The **refresh token is never visible to JavaScript.** It is an httpOnly `ourzo_refresh` cookie set by the API.
+- Every request uses `credentials: 'include'`. On a 401 from a non-auth endpoint, the client calls `POST /api/auth/refresh` (no body), retries once, and queues any concurrent requests.
+- **On boot**, if a user profile is remembered, `initializeAuth()` restores the session with the refresh cookie and then loads `/api/auth/me`. If that fails, auth state is cleared and protected routes redirect to `/login`.
+- Logout calls `POST /api/auth/logout`, which revokes the session and clears the cookie. The client then clears the auth store, the workspace store and the query cache.
+- The workspace store is cleared whenever the authenticated identity changes, so one user's workspace is never shown to the next user on a shared browser.
+
 Flow:
 
 ```text
@@ -500,11 +510,12 @@ API Request
 
 ↓
 
-Receive Tokens
+Receive access token (body)
++ refresh cookie (httpOnly)
 
 ↓
 
-Store Auth State
+Store Auth State (user persisted, token in memory)
 
 ↓
 

@@ -23,7 +23,8 @@ The goal is to document the selected technologies, their responsibilities, and t
 | Client State | Zustand |
 | Server State | TanStack Query |
 | Forms | React Hook Form |
-| Testing | Vitest + React Testing Library |
+| Testing | Vitest + React Testing Library (jsdom) |
+| Linting | oxlint |
 
 ---
 
@@ -38,7 +39,8 @@ The goal is to document the selected technologies, their responsibilities, and t
 | Validation | class-validator |
 | API Documentation | Swagger/OpenAPI |
 | Logging | NestJS Logger |
-| Testing | Jest |
+| Testing | Jest (unit) + supertest (e2e against a dedicated `*_test` database) |
+| Rate limiting client | ioredis 6 (bundles its own types) |
 
 ---
 
@@ -59,7 +61,9 @@ The goal is to document the selected technologies, their responsibilities, and t
 | Category | Technology |
 |---|---|
 | Containerization | Docker |
-| Local Backend Environment | Docker Compose |
+| Local Backend Environment | Docker Compose (or locally installed PostgreSQL and Redis) |
+| CI/CD | GitHub Actions |
+| Image Registry | GitHub Container Registry (GHCR) |
 | Cache / Future Jobs | Redis |
 | Frontend Deployment | Static Hosting |
 | Backend Deployment | Container Platform |
@@ -200,7 +204,7 @@ Decision:
 ```text
 JWT Access Tokens
 +
-Refresh Tokens
+Refresh Tokens (httpOnly cookie, rotated on use — ADR-010)
 ```
 
 Reason:
@@ -224,11 +228,13 @@ Refresh Token
 
 ↓
 
-Frontend uses Access Token
+Frontend keeps Access Token in memory;
+Refresh Token is set as an httpOnly cookie
 
 ↓
 
-Refresh Token obtains new Access Token
+Cookie-only POST /api/auth/refresh obtains a new
+Access Token and rotates the Refresh Token
 ```
 
 ---
@@ -347,13 +353,9 @@ Used for:
 Tools:
 
 ```text
-ESLint
-
-Prettier
-
-Husky
-
-lint-staged
+ESLint + Prettier   (apps/api)
+oxlint              (apps/web)
+Husky + lint-staged (pre-commit, repository root)
 ```
 
 Purpose:
@@ -374,8 +376,14 @@ Jest
 
 Used for:
 
-- Unit tests.
-- Integration tests.
+- Unit tests of services and guards, with mocked repositories.
+- E2E tests (`apps/api/test/*.e2e-spec.ts`) through the real HTTP pipeline. These cover:
+  - the tenant-isolation matrix
+  - the RBAC matrix
+  - API keys and rate limits
+  - cookie auth
+  - the core workflows
+- E2E tests run serially against `TEST_DATABASE_URL`, which must name a `*_test` database. CI enforces 70% line coverage of `src/**/*.service.ts`.
 
 ---
 
@@ -432,6 +440,7 @@ Infrastructure
 
 Docker
 Docker Compose
+GitHub Actions
 Redis
 Managed PostgreSQL
 

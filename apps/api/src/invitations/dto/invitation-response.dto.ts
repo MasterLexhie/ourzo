@@ -3,34 +3,34 @@ import { InvitationStatus, WorkspaceRole } from '@prisma/client';
 
 export class InvitationResponseDto {
   @ApiProperty()
-  id: string;
+  id!: string;
 
   @ApiProperty()
-  workspaceId: string;
+  workspaceId!: string;
 
   @ApiProperty()
-  email: string;
+  email!: string;
 
   @ApiProperty({ enum: WorkspaceRole })
-  role: WorkspaceRole;
+  role!: WorkspaceRole;
 
   @ApiProperty({ enum: InvitationStatus })
-  status: InvitationStatus;
+  status!: InvitationStatus;
 
   @ApiProperty()
-  invitedBy: string;
+  invitedBy!: string;
 
   @ApiProperty()
-  expiresAt: Date;
+  expiresAt!: Date;
 
   @ApiProperty()
-  acceptedAt: Date | null;
+  acceptedAt!: Date | null;
 
   @ApiProperty()
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiProperty()
-  updatedAt: Date;
+  updatedAt!: Date;
 }
 
 /**
@@ -42,21 +42,21 @@ export class CreateInvitationResponseDto extends InvitationResponseDto {
     example: 'http://localhost:5173/accept-invitation?token=…',
     description: 'Shareable link the invitee opens to accept the invitation',
   })
-  inviteUrl: string;
+  inviteUrl!: string;
 }
 
 export class InvitationListResponseDto {
   @ApiProperty({ type: [InvitationResponseDto] })
-  invitations: InvitationResponseDto[];
+  invitations!: InvitationResponseDto[];
 }
 
 export class AcceptInvitationResponseDto {
   @ApiProperty()
-  message: string;
+  message!: string;
 
   @ApiProperty()
-  workspaceId: string;
+  workspaceId!: string;
 
   @ApiProperty()
-  workspaceName: string;
+  workspaceName!: string;
 }

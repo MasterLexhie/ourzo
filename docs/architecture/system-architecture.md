@@ -256,8 +256,8 @@ unless a demonstrated requirement later justifies them.
 | Language | TypeScript | Frontend + backend |
 | Database | PostgreSQL | Persistent storage |
 | Cache/state | Redis | Rate limiting/cache |
-| Containers | Docker | Reproducible environment |
-| CI | GitHub Actions | Automated validation |
+| Containers | Docker + Compose | Reproducible API/web images and local stack |
+| CI/CD | GitHub Actions + GHCR | Automated validation and image publishing |
 
 ---
 

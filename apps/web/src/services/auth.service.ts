@@ -1,5 +1,5 @@
 import { apiClient } from './api.client';
-import type { AuthResponse, TokenResponse, RegisterDto, LoginDto, RefreshTokenDto } from '@/types/auth.types';
+import type { AuthResponse, RegisterDto, LoginDto } from '@/types/auth.types';
 
 export const authService = {
   async register(dto: RegisterDto): Promise<AuthResponse> {
@@ -10,12 +10,9 @@ export const authService = {
     return apiClient.post<AuthResponse>('/api/auth/login', dto);
   },
 
-  async refresh(dto: RefreshTokenDto): Promise<TokenResponse> {
-    return apiClient.post<TokenResponse>('/api/auth/refresh', dto);
-  },
-
-  async logout(refreshToken?: string): Promise<{ message: string }> {
-    return apiClient.post<{ message: string }>('/api/auth/logout', { refreshToken });
+  /** Revokes the session; the server reads and clears the refresh cookie. */
+  async logout(): Promise<{ message: string }> {
+    return apiClient.post<{ message: string }>('/api/auth/logout', {});
   },
 
   async me(): Promise<{ id: string; email: string; firstName: string; lastName: string; emailVerifiedAt: string | null }> {

@@ -4,6 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { AuthRepository } from './repositories/auth.repository';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
@@ -28,6 +29,7 @@ import { StringValue } from 'ms';
   controllers: [AuthController],
   providers: [
     AuthService,
+    AuthRepository,
     JwtStrategy,
     JwtAuthGuard,
     OptionalJwtAuthGuard,

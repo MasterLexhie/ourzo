@@ -3,25 +3,25 @@ import { WorkspaceRole } from '@prisma/client';
 
 export class MemberResponseDto {
   @ApiProperty()
-  userId: string;
+  userId!: string;
 
   @ApiProperty()
-  email: string;
+  email!: string;
 
   @ApiProperty()
-  firstName: string;
+  firstName!: string;
 
   @ApiProperty()
-  lastName: string;
+  lastName!: string;
 
   @ApiProperty({ enum: WorkspaceRole })
-  role: WorkspaceRole;
+  role!: WorkspaceRole;
 
   @ApiProperty()
-  joinedAt: Date;
+  joinedAt!: Date;
 }
 
 export class MemberListResponseDto {
   @ApiProperty({ type: [MemberResponseDto] })
-  members: MemberResponseDto[];
+  members!: MemberResponseDto[];
 }

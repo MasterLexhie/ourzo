@@ -1,45 +1,29 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { Reflector } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { PublicRouteGuard } from './auth';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { configureApp } from './app.setup';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
-  const reflector = app.get(Reflector);
 
-  const allowOrigin =
-    configService.get<string>('ALLOW_ORIGIN') || 'http://localhost:5173/';
-  const origins = allowOrigin
-    .split(',')
-    .map((origin) => origin.trim().replace(/\/$/, ''));
+  // Behind a reverse proxy (e.g. the web container's nginx), request.ip would
+  // otherwise be the proxy's address and every client would share one
+  // rate-limit bucket. TRUST_PROXY is the number of trusted proxy hops; leave
+  // it unset when the API is exposed directly, or X-Forwarded-For is spoofable.
+  const trustedProxyHops = Number(configService.get<string>('TRUST_PROXY'));
+  if (Number.isInteger(trustedProxyHops) && trustedProxyHops > 0) {
+    app.set('trust proxy', trustedProxyHops);
+  }
 
-  app.enableCors({
-    origin: origins,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    credentials: true,
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Workspace-Id'],
-    exposedHeaders: ['Content-Length', 'X-Request-Id'],
-  });
+  configureApp(app);
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
-    }),
-  );
-
-  app.useGlobalFilters(new HttpExceptionFilter());
-
-  app.useGlobalGuards(new PublicRouteGuard(reflector));
+  // Handle SIGTERM/SIGINT so `docker stop` and rolling deploys shut down
+  // gracefully. Node runs as PID 1 in the container, which has no default
+  // signal handlers, so without this the process is SIGKILLed after the timeout.
+  app.enableShutdownHooks();
 
   const config = new DocumentBuilder()
     .setTitle('Ourzo API')

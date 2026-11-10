@@ -5,9 +5,10 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
+import { MembersRepository } from '@/members/repositories/members.repository';
 import { AuditService } from '@/audit/audit.service';
 import { UsageService } from '@/usage/usage.service';
+import { NotificationsService } from '@/notifications/notifications.service';
 import { ProjectsRepository } from './repositories/projects.repository';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -60,10 +61,11 @@ export class ProjectsService {
   private readonly logger = new Logger(ProjectsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly membersRepository: MembersRepository,
     private readonly projectsRepository: ProjectsRepository,
     private readonly auditService: AuditService,
     private readonly usageService: UsageService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -71,9 +73,10 @@ export class ProjectsService {
     workspaceId: string,
     dto: CreateProjectDto,
   ): Promise<ProjectResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -141,9 +144,10 @@ export class ProjectsService {
     workspaceId: string,
     options?: { status?: ProjectStatus; page?: number; limit?: number },
   ): Promise<ProjectListResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -167,9 +171,10 @@ export class ProjectsService {
     workspaceId: string,
     projectId: string,
   ): Promise<ProjectResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -209,9 +214,10 @@ export class ProjectsService {
     projectId: string,
     dto: UpdateProjectDto,
   ): Promise<ProjectResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -286,9 +292,10 @@ export class ProjectsService {
     workspaceId: string,
     projectId: string,
   ): Promise<{ message: string }> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -439,12 +446,9 @@ export class ProjectsService {
     workspaceId: string,
     userIds: string[],
   ): Promise<void> {
-    const workspaceMembers = await this.prisma.workspaceMember.findMany({
-      where: { workspaceId, userId: { in: userIds } },
-      select: { userId: true },
-    });
-
-    const validMemberIds = new Set(workspaceMembers.map((m) => m.userId));
+    const validMemberIds = new Set(
+      await this.membersRepository.findMemberUserIds(workspaceId, userIds),
+    );
     const invalidIds = userIds.filter((id) => !validMemberIds.has(id));
 
     if (invalidIds.length > 0) {
@@ -459,9 +463,10 @@ export class ProjectsService {
     actorId: string,
     workspaceId: string,
   ): Promise<void> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId: actorId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      actorId,
+    );
 
     if (
       !membership ||
@@ -524,8 +529,12 @@ export class ProjectsService {
     title: string,
     message: string,
   ): Promise<void> {
-    await this.prisma.notification.create({
-      data: { workspaceId, userId, type, title, message },
+    await this.notificationsService.notify({
+      workspaceId,
+      userId,
+      type,
+      title,
+      message,
     });
   }
 
@@ -554,22 +563,17 @@ export class ProjectsService {
     title: string,
     message: string,
   ): Promise<void> {
-    const members = await this.prisma.workspaceMember.findMany({
-      where: { workspaceId },
-      select: { userId: true },
-    });
+    const members = await this.membersRepository.findByWorkspace(workspaceId);
 
-    const notifications = members.map((m) => ({
-      workspaceId,
-      userId: m.userId,
-      type,
-      title,
-      message,
-    }));
-
-    await this.prisma.notification.createMany({
-      data: notifications,
-    });
+    await this.notificationsService.notifyMany(
+      members.map((m) => ({
+        workspaceId,
+        userId: m.userId,
+        type,
+        title,
+        message,
+      })),
+    );
   }
 
   private mapToResponse(project: ProjectWithDetails): ProjectResponseDto {

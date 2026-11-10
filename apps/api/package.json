@@ -7,19 +7,20 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "format:check": "prettier --check \"src/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "lint:fix": "eslint \"{src,test}/**/*.ts\" --fix",
-    "test": "jest",
+    "test": "jest && jest --config ./test/jest-e2e.json --runInBand",
+    "test:unit": "jest",
     "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
+    "test:cov": "jest --config ./test/jest-e2e.json --runInBand --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
@@ -39,7 +40,6 @@
     "@node-rs/bcrypt": "^1.10.8",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
-    "@types/ioredis": "^5.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "date-fns": "^4.4.0",
@@ -88,14 +88,21 @@
     ],
     "rootDir": ".",
     "testMatch": [
-      "**/src/**/*.spec.ts",
-      "**/test/**/*.spec.ts"
+      "<rootDir>/src/**/*.spec.ts"
     ],
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.ts$": "ts-jest",
+      "^.+\\.js$": [
+        "ts-jest",
+        {
+          "tsconfig": {
+            "allowJs": true
+          }
+        }
+      ]
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!(.pnpm/)?(@nestjs|bcrypt|passport-jwt|ms|jsonwebtoken)/)"
+      "/node_modules/(?!\\.pnpm/|@nestjs/(jwt|passport|mapped-types)/)"
     ],
     "collectCoverageFrom": [
       "src/**/*.(t|j)s"
@@ -103,8 +110,7 @@
     "coverageDirectory": "coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {
-      "^@/(.*)$": "<rootDir>/src/$1",
-      "^@nestjs/jwt$": "<rootDir>/test/__mocks__/nestjs-jwt.mock.ts"
+      "^@/(.*)$": "<rootDir>/src/$1"
     }
   }
 }

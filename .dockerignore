@@ -1,13 +1,35 @@
-# Docker build context is the repository root (see apps/api/Dockerfile).
+# Build context is the repository root (see apps/*/Dockerfile).
 **/node_modules
 **/dist
 **/.turbo
 **/coverage
+**/coverage-e2e
+**/.vite
+
+# VCS, CI and tooling that images never need
 .git
 .github
 .husky
 docs
+
+# Secrets and local environment files
 **/.env
 **/.env.*
 !**/.env.example
-*.md
+!**/.env.production.example
+
+# Editor / agent folders
+**/.claude
+**/.agents
+**/.windsurf
+**/skills-lock.json
+.vscode
+.idea
+**/.DS_Store
+
+# Docs and logs
+**/*.md
+**/*.log
+
+# Compose files are not part of any image
+compose*.yaml

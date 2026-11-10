@@ -3,42 +3,42 @@ import { WorkspacePlan, WorkspaceRole } from '@prisma/client';
 
 export class OrganizationMemberDto {
   @ApiProperty({ example: 'user-uuid' })
-  userId: string;
+  userId!: string;
 
   @ApiProperty({ example: 'user@example.com' })
-  email: string;
+  email!: string;
 
   @ApiProperty({ example: 'John' })
-  firstName: string;
+  firstName!: string;
 
   @ApiProperty({ example: 'Doe' })
-  lastName: string;
+  lastName!: string;
 
   @ApiProperty({ enum: WorkspaceRole, example: 'owner' })
-  role: WorkspaceRole;
+  role!: WorkspaceRole;
 
   @ApiProperty({ example: '2024-01-15T10:30:00Z' })
-  joinedAt: Date;
+  joinedAt!: Date;
 }
 
 export class OrganizationResponseDto {
   @ApiProperty({ example: 'org-uuid' })
-  id: string;
+  id!: string;
 
   @ApiProperty({ example: 'Acme Inc' })
-  name: string;
+  name!: string;
 
   @ApiProperty({ example: 'acme-inc' })
-  slug: string;
+  slug!: string;
 
   @ApiProperty({ enum: WorkspacePlan, example: 'free' })
-  plan: WorkspacePlan;
+  plan!: WorkspacePlan;
 
   @ApiProperty({ example: '2024-01-15T10:30:00Z' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiProperty({ example: '2024-01-15T10:30:00Z' })
-  updatedAt: Date;
+  updatedAt!: Date;
 
   @ApiProperty({ type: [OrganizationMemberDto], required: false })
   members?: OrganizationMemberDto[];
@@ -52,5 +52,5 @@ export class OrganizationResponseDto {
 
 export class OrganizationListResponseDto {
   @ApiProperty({ type: [OrganizationResponseDto] })
-  organizations: OrganizationResponseDto[];
+  organizations!: OrganizationResponseDto[];
 }

@@ -373,6 +373,15 @@ Prisma / Raw SQL
 PostgreSQL
 ```
 
+### Implemented Rules
+
+- **Only repositories inject `PrismaService`.** Services contain no `this.prisma.*` calls. The check is `grep -rn "this.prisma\." apps/api/src --include='*.service.ts'`, which must return nothing outside `health.service.ts` and `prisma.service.ts`.
+- **By-id methods on tenant-owned tables take `(id, workspaceId)`.** Reads use `findFirst({ where: { id, workspaceId } })`. Writes use `updateMany` / `deleteMany` with the same filter and check the affected count.
+- **Shared membership lookups** live on the global `MembersRepository`: `findMembership`, `findMemberUserIds`, `isEmailMember`, `addMember`, `setRole`, `findUserProfile`.
+- **Transactions** use `repository.withTransaction(fn)`. Repository methods and `AuditService.record` accept the `tx` client, so related writes commit together (for example, invitation accept).
+- **Audit and notification writes** go only through `AuditService.record` and `NotificationsService.notify` / `notifyMany`.
+- **Lookups that legitimately have no workspace:** invitation by token (accept flow), API key by prefix (authentication) and users (platform identity).
+
 ### Repository Responsibilities
 
 Repositories handle:

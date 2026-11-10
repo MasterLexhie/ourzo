@@ -4,30 +4,31 @@ import {
   ConflictException,
   Logger,
 } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
+import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { hash, verify } from '@node-rs/bcrypt';
-import { createHash } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '@/prisma/prisma.service';
+import { AuthRepository } from './repositories/auth.repository';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { TokenResponseDto, AuthResponseDto } from './dto/auth-response.dto';
+import {
+  AuthResponseDto,
+  IssuedSession,
+  TokenResponseDto,
+} from './dto/auth-response.dto';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly authRepository: AuthRepository,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<AuthResponseDto> {
-    const existingUser = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
+  async register(dto: RegisterDto): Promise<IssuedSession<AuthResponseDto>> {
+    const existingUser = await this.authRepository.findUserByEmail(dto.email);
 
     if (existingUser) {
       throw new ConflictException('Email already registered');
@@ -35,31 +36,27 @@ export class AuthService {
 
     const passwordHash = await this.hashPassword(dto.password);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: dto.email,
-        passwordHash,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
-      },
+    const user = await this.authRepository.createUser({
+      email: dto.email,
+      passwordHash,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
     });
 
-    const tokens = this.generateTokens(user.id);
-    await this.storeRefreshToken(user.id, tokens.refreshToken);
+    const session = this.generateTokens(user.id);
+    await this.storeRefreshToken(user.id, session.refreshToken);
 
     this.logger.log(`User registered: ${user.id}`);
 
-    return this.buildAuthResponse(user, tokens);
+    return { ...session, body: this.buildAuthResponse(user, session.body) };
   }
 
   async login(
     dto: LoginDto,
     userAgent?: string,
     ipAddress?: string,
-  ): Promise<AuthResponseDto> {
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
+  ): Promise<IssuedSession<AuthResponseDto>> {
+    const user = await this.authRepository.findUserByEmail(dto.email);
 
     if (!user) {
       this.logFailedLogin(dto.email, 'unknown_user');
@@ -76,73 +73,68 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const tokens = this.generateTokens(user.id);
+    const session = this.generateTokens(user.id);
     await this.storeRefreshToken(
       user.id,
-      tokens.refreshToken,
+      session.refreshToken,
       userAgent,
       ipAddress,
     );
 
     this.logger.log(`User logged in: ${user.id}`);
 
-    return this.buildAuthResponse(user, tokens);
+    return { ...session, body: this.buildAuthResponse(user, session.body) };
   }
 
-  async refresh(dto: RefreshTokenDto): Promise<TokenResponseDto> {
-    const payload = await this.verifyRefreshToken(dto.refreshToken);
+  /**
+   * Rotates a refresh token: the presented token is revoked and a new pair is
+   * issued, so a replayed (stolen) token fails after its first use.
+   */
+  async refresh(
+    refreshToken: string | undefined,
+  ): Promise<IssuedSession<TokenResponseDto>> {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
 
-    const storedToken = await this.prisma.refreshToken.findFirst({
-      where: {
-        userId: payload.sub,
-        tokenHash: await this.hashToken(dto.refreshToken),
-        revokedAt: null,
-        expiresAt: { gt: new Date() },
-      },
-    });
+    const payload = await this.verifyRefreshToken(refreshToken);
+
+    const storedToken = await this.authRepository.findActiveRefreshToken(
+      payload.sub,
+      await this.hashToken(refreshToken),
+    );
 
     if (!storedToken) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
 
-    await this.revokeRefreshToken(storedToken.id);
+    await this.authRepository.revokeRefreshToken(payload.sub, storedToken.id);
 
-    const tokens = this.generateTokens(payload.sub);
-    await this.storeRefreshToken(payload.sub, tokens.refreshToken);
+    const session = this.generateTokens(payload.sub);
+    await this.storeRefreshToken(payload.sub, session.refreshToken);
 
-    return tokens;
+    return session;
   }
 
   async logout(userId: string, refreshToken?: string): Promise<void> {
     if (refreshToken) {
       const tokenHash = await this.hashToken(refreshToken);
-      const storedToken = await this.prisma.refreshToken.findFirst({
-        where: { userId, tokenHash, revokedAt: null },
-      });
+      const storedToken = await this.authRepository.findActiveRefreshToken(
+        userId,
+        tokenHash,
+      );
       if (storedToken) {
-        await this.revokeRefreshToken(storedToken.id);
+        await this.authRepository.revokeRefreshToken(userId, storedToken.id);
       }
     } else {
-      await this.prisma.refreshToken.updateMany({
-        where: { userId, revokedAt: null },
-        data: { revokedAt: new Date() },
-      });
+      await this.authRepository.revokeAllRefreshTokens(userId);
     }
 
     this.logger.log(`User logged out: ${userId}`);
   }
 
   async validateUser(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        emailVerifiedAt: true,
-      },
-    });
+    const user = await this.authRepository.findSessionUser(userId);
 
     if (!user) {
       throw new UnauthorizedException('User not found');
@@ -151,37 +143,40 @@ export class AuthService {
     return user;
   }
 
-  private generateTokens(userId: string): TokenResponseDto {
+  private generateTokens(userId: string): IssuedSession<TokenResponseDto> {
     const accessTokenExpiry =
       this.configService.get<string>('JWT_ACCESS_TOKEN_EXPIRY') ?? '15m';
     const refreshTokenExpiry =
       this.configService.get<string>('JWT_REFRESH_TOKEN_EXPIRY') ?? '7d';
 
     const accessToken = this.jwtService.sign(
-      { sub: userId, type: 'access' },
+      // jti makes every token unique, even when issued within the same second.
+      { sub: userId, type: 'access', jti: randomUUID() },
       {
         secret: this.configService.getOrThrow<string>('JWT_SECRET'),
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        expiresIn: accessTokenExpiry as any,
+        expiresIn: accessTokenExpiry as JwtSignOptions['expiresIn'],
       },
     );
 
     const refreshToken = this.jwtService.sign(
-      { sub: userId, type: 'refresh' },
+      { sub: userId, type: 'refresh', jti: randomUUID() },
       {
         secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        expiresIn: refreshTokenExpiry as any,
+        expiresIn: refreshTokenExpiry as JwtSignOptions['expiresIn'],
       },
     );
 
-    const expiresIn = this.parseExpiryToSeconds(accessTokenExpiry);
-
     return {
-      accessToken,
+      body: {
+        accessToken,
+        tokenType: 'Bearer',
+        expiresIn: this.parseExpiryToSeconds(accessTokenExpiry),
+      },
       refreshToken,
-      tokenType: 'Bearer',
-      expiresIn,
+      refreshTokenMaxAgeSeconds: this.parseExpiryToSeconds(
+        refreshTokenExpiry,
+        7 * 24 * 60 * 60,
+      ),
     };
   }
 
@@ -192,40 +187,40 @@ export class AuthService {
     ipAddress?: string,
   ): Promise<void> {
     const tokenHash = await this.hashToken(refreshToken);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const decoded = this.jwtService.decode(refreshToken);
-    const exp = (decoded as { exp?: number } | null)?.exp;
+    const decoded = this.jwtService.decode<{ exp?: number } | null>(
+      refreshToken,
+    );
+    const exp = decoded?.exp;
 
-    await this.prisma.refreshToken.create({
-      data: {
-        userId,
-        tokenHash,
-        userAgent,
-        ipAddress,
-        expiresAt: exp
-          ? new Date(exp * 1000)
-          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      },
-    });
-  }
-
-  private async revokeRefreshToken(tokenId: string): Promise<void> {
-    await this.prisma.refreshToken.update({
-      where: { id: tokenId },
-      data: { revokedAt: new Date() },
+    await this.authRepository.createRefreshToken({
+      userId,
+      tokenHash,
+      userAgent,
+      ipAddress,
+      expiresAt: exp
+        ? new Date(exp * 1000)
+        : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     });
   }
 
   private async verifyRefreshToken(
     token: string,
   ): Promise<{ sub: string; type: string }> {
+    let payload: { sub: string; type: string };
     try {
-      return this.jwtService.verify(token, {
+      payload = await this.jwtService.verifyAsync<{
+        sub: string;
+        type: string;
+      }>(token, {
         secret: this.configService.getOrThrow<string>('JWT_REFRESH_SECRET'),
       });
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
+    if (payload.type !== 'refresh') {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    return payload;
   }
 
   private async hashPassword(password: string): Promise<string> {
@@ -263,9 +258,9 @@ export class AuthService {
     return Promise.resolve(createHash('sha256').update(token).digest('hex'));
   }
 
-  private parseExpiryToSeconds(expiry: string): number {
+  private parseExpiryToSeconds(expiry: string, fallback = 900): number {
     const match = expiry.match(/^(\d+)([smhd])$/);
-    if (!match) return 900;
+    if (!match) return fallback;
     const value = parseInt(match[1], 10);
     const unit = match[2];
     switch (unit) {
@@ -278,7 +273,7 @@ export class AuthService {
       case 'd':
         return value * 24 * 60 * 60;
       default:
-        return 900;
+        return fallback;
     }
   }
 

@@ -11,5 +11,5 @@ export class AddProjectMembersDto {
   @ArrayNotEmpty()
   @ArrayMaxSize(100)
   @IsUUID('4', { each: true })
-  userIds: string[];
+  userIds!: string[];
 }

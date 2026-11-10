@@ -3,19 +3,19 @@ import { Prisma } from '@prisma/client';
 
 export class AuditLogResponseDto {
   @ApiProperty({ example: 'audit-uuid' })
-  id: string;
+  id!: string;
 
   @ApiProperty({ example: 'workspace-uuid' })
-  workspaceId: string;
+  workspaceId!: string;
 
   @ApiPropertyOptional({ example: 'user-uuid' })
   actorId?: string | null;
 
   @ApiProperty({ example: 'project.created' })
-  action: string;
+  action!: string;
 
   @ApiProperty({ example: 'project' })
-  resourceType: string;
+  resourceType!: string;
 
   @ApiPropertyOptional({ example: 'project-uuid' })
   resourceId?: string | null;
@@ -26,7 +26,7 @@ export class AuditLogResponseDto {
   metadata?: Prisma.JsonValue | null;
 
   @ApiProperty({ example: '2024-01-15T10:30:00Z' })
-  createdAt: Date;
+  createdAt!: Date;
 
   @ApiPropertyOptional({
     example: {
@@ -46,14 +46,14 @@ export class AuditLogResponseDto {
 
 export class AuditLogListResponseDto {
   @ApiProperty({ type: [AuditLogResponseDto] })
-  auditLogs: AuditLogResponseDto[];
+  auditLogs!: AuditLogResponseDto[];
 
   @ApiProperty({ example: 100 })
-  total: number;
+  total!: number;
 
   @ApiProperty({ example: 1 })
-  page: number;
+  page!: number;
 
   @ApiProperty({ example: 20 })
-  limit: number;
+  limit!: number;
 }

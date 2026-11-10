@@ -5,7 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
+import { MembersRepository } from '@/members/repositories/members.repository';
 import { AuditService } from '@/audit/audit.service';
 import { OrganizationsRepository } from './repositories/organizations.repository';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
@@ -50,7 +50,7 @@ export class OrganizationsService {
   private readonly logger = new Logger(OrganizationsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly membersRepository: MembersRepository,
     private readonly organizationsRepository: OrganizationsRepository,
     private readonly auditService: AuditService,
   ) {}
@@ -109,31 +109,17 @@ export class OrganizationsService {
       throw new NotFoundException('Organization not found');
     }
 
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this organization');
     }
 
-    const fullWorkspace = await this.prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      include: {
-        members: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                firstName: true,
-                lastName: true,
-              },
-            },
-          },
-        },
-      },
-    });
+    const fullWorkspace =
+      await this.organizationsRepository.findByIdWithMembers(workspaceId);
 
     return this.mapToResponse(fullWorkspace!);
   }

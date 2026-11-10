@@ -245,3 +245,36 @@ API keys are sent as `Authorization: Bearer <key>`, the same header as user JWTs
 
 Any new controller that should accept API keys must opt in explicitly with the guard and scopes. Without that, keys are rejected.
 
+---
+
+## ADR-010 — Refresh Token in an httpOnly Cookie
+
+### Status
+
+Accepted
+
+### Decision
+
+- The refresh token is delivered only as the `ourzo_refresh` cookie, with these attributes: `HttpOnly`, `SameSite=Strict`, `Path=/api/auth`, `Secure` in production, and `Max-Age` equal to the refresh expiry.
+- Response bodies carry only the short-lived access token.
+- The web app keeps the access token in memory and persists only the user profile.
+
+### Reason
+
+Tokens in `localStorage` can be exfiltrated by any XSS payload. An httpOnly cookie can't be read by JavaScript, and the access token in memory is short-lived (15 minutes).
+
+### Rules
+
+- `POST /api/auth/refresh` and `POST /api/auth/logout` read the cookie.
+- A `refreshToken` body field is still accepted for **one release** for older clients. It is marked deprecated in Swagger.
+- Refresh rotates the token. The presented token is revoked, so replaying it returns 401.
+- Every JWT carries a unique `jti`, so tokens issued within the same second never collide.
+- Logout revokes the session and clears the cookie.
+- On boot the SPA restores the session with a cookie-only `POST /api/auth/refresh` (`credentials: 'include'`).
+- CORS allows credentials only for the exact `ALLOW_ORIGIN` list.
+
+### Consequences
+
+- The web app and the API must be served from the **same site** (for example `app.example.com` and `api.example.com`), otherwise `SameSite=Strict` blocks the cookie. Local development (`localhost:5173` → `localhost:3000`) is same-site.
+- Users signed in before this change have to sign in once more.
+

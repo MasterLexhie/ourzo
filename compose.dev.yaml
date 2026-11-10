@@ -1,0 +1,39 @@
+# Local development overrides. Use together with compose.yaml and a root `.env`
+# copied from `.env.example` (its values are development-only):
+#
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d postgres redis
+#     -> PostgreSQL on localhost:5432 (ourzo_dev + ourzo_test) and Redis on
+#        localhost:6379, for `pnpm dev` / `pnpm test` on the host
+#
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d --build
+#     -> full stack; web on :8080, API also on :3000 (Swagger at /api/docs)
+#
+# Published ports bind to 127.0.0.1 only.
+
+services:
+  postgres:
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ourzo_dev}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      # Creates the ourzo_test database on first start (empty volume only).
+      - ./infrastructure/docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"
+
+  migrate:
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ourzo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ourzo_dev}?schema=public
+
+  api:
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ourzo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ourzo_dev}?schema=public
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  postgres_dev_data:

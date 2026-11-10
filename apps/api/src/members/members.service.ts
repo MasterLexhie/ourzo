@@ -5,7 +5,6 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { PrismaService } from '@/prisma/prisma.service';
 import { AuditService } from '@/audit/audit.service';
 import { MembersRepository } from './repositories/members.repository';
 import {
@@ -40,7 +39,6 @@ export class MembersService {
   private readonly logger = new Logger(MembersService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly membersRepository: MembersRepository,
     private readonly auditService: AuditService,
   ) {}
@@ -49,9 +47,10 @@ export class MembersService {
     userId: string,
     workspaceId: string,
   ): Promise<MemberListResponseDto> {
-    const membership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const membership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!membership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -70,9 +69,10 @@ export class MembersService {
     targetUserId: string,
     dto: UpdateMemberRoleDto,
   ): Promise<MemberResponseDto> {
-    const requesterMembership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const requesterMembership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!requesterMembership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -142,10 +142,7 @@ export class MembersService {
 
     return this.mapToResponse({
       ...updatedMember,
-      user: (await this.prisma.user.findUnique({
-        where: { id: targetUserId },
-        select: { id: true, email: true, firstName: true, lastName: true },
-      }))!,
+      user: (await this.membersRepository.findUserProfile(targetUserId))!,
     });
   }
 
@@ -154,9 +151,10 @@ export class MembersService {
     workspaceId: string,
     targetUserId: string,
   ): Promise<{ message: string }> {
-    const requesterMembership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const requesterMembership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!requesterMembership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -232,9 +230,10 @@ export class MembersService {
     workspaceId: string,
     dto: TransferOwnershipDto,
   ): Promise<MemberResponseDto> {
-    const requesterMembership = await this.prisma.workspaceMember.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-    });
+    const requesterMembership = await this.membersRepository.findMembership(
+      workspaceId,
+      userId,
+    );
 
     if (!requesterMembership) {
       throw new ForbiddenException('Not a member of this workspace');
@@ -259,16 +258,19 @@ export class MembersService {
       );
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.workspaceMember.update({
-        where: { workspaceId_userId: { workspaceId, userId: dto.userId } },
-        data: { role: WorkspaceRole.owner },
-      });
-
-      await tx.workspaceMember.update({
-        where: { workspaceId_userId: { workspaceId, userId } },
-        data: { role: WorkspaceRole.admin },
-      });
+    await this.membersRepository.withTransaction(async (tx) => {
+      await this.membersRepository.setRole(
+        workspaceId,
+        dto.userId,
+        WorkspaceRole.owner,
+        tx,
+      );
+      await this.membersRepository.setRole(
+        workspaceId,
+        userId,
+        WorkspaceRole.admin,
+        tx,
+      );
 
       await this.createAuditLogTx(
         tx,
@@ -295,10 +297,7 @@ export class MembersService {
 
     return this.mapToResponse({
       ...updatedMember!,
-      user: (await this.prisma.user.findUnique({
-        where: { id: dto.userId },
-        select: { id: true, email: true, firstName: true, lastName: true },
-      }))!,
+      user: (await this.membersRepository.findUserProfile(dto.userId))!,
     });
   }
 

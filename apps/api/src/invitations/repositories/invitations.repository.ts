@@ -164,8 +164,9 @@ export class InvitationsRepository {
     workspaceId: string,
     status: InvitationStatus,
     acceptedAt?: Date,
+    tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
-    const { count } = await this.prisma.invitation.updateMany({
+    const { count } = await (tx ?? this.prisma).invitation.updateMany({
       where: { id, workspaceId },
       data: {
         status,

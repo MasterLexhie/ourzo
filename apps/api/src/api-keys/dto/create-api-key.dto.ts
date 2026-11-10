@@ -13,7 +13,7 @@ export class ApiKeyScopeDto {
   @ApiProperty({ example: 'projects:read' })
   @IsString()
   @IsNotEmpty()
-  scope: string;
+  scope!: string;
 }
 
 export class CreateApiKeyDto {
@@ -26,7 +26,7 @@ export class CreateApiKeyDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(150)
-  name: string;
+  name!: string;
 
   @ApiProperty({
     description: 'Array of scopes',
@@ -36,7 +36,7 @@ export class CreateApiKeyDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => ApiKeyScopeDto)
-  scopes: ApiKeyScopeDto[];
+  scopes!: ApiKeyScopeDto[];
 
   @ApiPropertyOptional({
     description: 'Expiration date (ISO 8601)',
