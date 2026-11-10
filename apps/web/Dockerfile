@@ -35,6 +35,7 @@ FROM ${NGINX_IMAGE} AS runner
 ENV API_UPSTREAM=http://api:3000
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+COPY LICENSE /licenses/LICENSE
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1

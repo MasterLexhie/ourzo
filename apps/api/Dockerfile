@@ -35,6 +35,7 @@ RUN pnpm prisma:generate && pnpm build
 
 # ---------- Migrate job (dev deps kept for the Prisma CLI) ----------
 FROM build AS migrate
+COPY LICENSE /licenses/LICENSE
 ENV DATABASE_URL= \
     NODE_ENV=production
 RUN chown -R node:node /app/apps/api
@@ -59,6 +60,7 @@ WORKDIR /app
 COPY --from=prod-deps --chown=node:node /prod/api/node_modules ./node_modules
 COPY --from=prod-deps --chown=node:node /prod/api/package.json ./package.json
 COPY --from=build --chown=node:node /app/apps/api/dist ./dist
+COPY LICENSE /licenses/LICENSE
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
