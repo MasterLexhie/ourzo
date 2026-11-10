@@ -11,7 +11,8 @@ The primary engineering goal of this repository is to demonstrate extreme archit
 - `apps/` — Contains deployable applications including the frontend and backend.
 - `packages/` — Reserved for shared packages and tooling configuration, left empty for now.
 - `docs/` — Stores Visual models, design documents, requirements, and architectural decision records.
-- `infrastructure/` — Contains local development containers and continuous integration setup.
+- `infrastructure/` — Supporting files for local containers (e.g. `infrastructure/docker/postgres-init`).
+- `compose.yaml`, `compose.dev.yaml`, `apps/*/Dockerfile`, `.github/workflows/` — Container and CI/CD definitions (see `docs/deployment.md`).
 
 - `apps/api` — NestJS backend. Responsible for all business logic, authorization, authentication, tenant isolation, and PostgreSQL database access. It must never run client-side code, serve raw static assets, or trust arbitrary client-supplied workspace IDs.
 - `apps/web` — React frontend. Responsible for client-side routing, user interfaces, frontend state management, and REST API consumption. It must never connect to the database directly, contain business rules, or be treated as a security boundary.
@@ -47,7 +48,8 @@ Approved technologies:
 **Infrastructure & Tooling:**
 - **pnpm:** Used as the fast workspace package manager to manage monorepo dependencies cleanly.
 - **Turborepo:** Used for task runner coordination, build pipelines, and caching test/lint/build operations.
-- **Docker & Docker Compose:** Used to orchestrate local development containers for PostgreSQL and Redis.
+- **Docker & Docker Compose:** Used to build the API and web images and to run PostgreSQL, Redis and the full stack locally.
+- **GitHub Actions & GHCR:** Used for CI (format, lint, type check, tests, build, image build) and for publishing images to GitHub Container Registry.
 - **ESLint & Prettier:** Used for automated static code analysis, formatting enforcement, and style consistency.
 - **Husky & lint-staged:** Used to automatically run ESLint and Prettier formatting checks prior to committing files.
 
@@ -134,6 +136,7 @@ Approved technologies:
 | Repository structure | docs/development/repository-structure.md |
 | Development setup | docs/development/development-setup.md |
 | CI/CD | docs/development/ci-cd-foundation.md |
+| Docker and deployment | docs/deployment.md |
 | Environment configuration | docs/development/environment-configuration.md |
 | Database tooling | docs/development/database-tooling.md |
 | Code quality setup | docs/development/code-quality-setup.md |

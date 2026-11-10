@@ -40,7 +40,8 @@ Install:
 |---|---|
 | Node.js LTS | JavaScript runtime |
 | pnpm | Package manager |
-| Docker | Container runtime |
+| Docker + Compose | PostgreSQL, Redis and the full stack (recommended) |
+| PostgreSQL 16 / Redis 7 | Only if not using Docker |
 | Git | Version control |
 
 ---
@@ -180,29 +181,24 @@ http://localhost:5173
 
 ## Docker Development Environment
 
-Docker manages:
+Docker Compose runs PostgreSQL, Redis and, optionally, the whole stack. Configuration comes from a root `.env` copied from `.env.example`.
 
-- Backend runtime.
-- PostgreSQL.
-- Redis.
-
-Location:
-
-```text
-infrastructure/docker/
-```
-
-Start infrastructure:
+Infrastructure only (apps run on the host with `pnpm dev`):
 
 ```bash
-docker compose -f docker-compose.dev.yml up
+cp .env.example .env
+docker compose -f compose.yaml -f compose.dev.yaml up -d postgres redis
 ```
 
-The API image builds from the repository root (`context: .`, `dockerfile: apps/api/Dockerfile`). To build it alone:
+This publishes PostgreSQL on `127.0.0.1:5432` (databases `ourzo_dev` and `ourzo_test`, created by `infrastructure/docker/postgres-init`) and Redis on `127.0.0.1:6379` (no password).
+
+Full stack (web on `http://localhost:8080`, API also on `:3000`):
 
 ```bash
-docker build -f apps/api/Dockerfile .
+docker compose -f compose.yaml -f compose.dev.yaml up -d --build
 ```
+
+See `docs/deployment.md` for logs, rebuilds and troubleshooting. Without Docker, install PostgreSQL 16 and Redis 7 locally and run `createdb ourzo_dev`.
 
 ---
 
@@ -288,7 +284,7 @@ pnpm prisma db seed
 Typical workflow:
 
 ```text
-1. Start Docker services
+1. Start PostgreSQL and Redis (Docker Compose)
 ↓
 2. Start backend
 ↓
@@ -335,7 +331,7 @@ Tests (API unit + e2e, web):
 
 ```bash
 # e2e suites need a disposable database whose name ends in _test
-docker compose -f docker-compose.dev.yml exec postgres createdb -U ourzo ourzo_test
+# (compose.dev.yaml creates ourzo_test; with local installs: createdb ourzo_test)
 export TEST_DATABASE_URL=postgresql://ourzo:dev_password@localhost:5432/ourzo_test
 pnpm test
 ```

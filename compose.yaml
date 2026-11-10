@@ -1,0 +1,125 @@
+# Ourzo full stack: PostgreSQL, Redis, one-shot migrations, API and web.
+#
+# Production-shaped base file. Values come from a root `.env` (see .env.example)
+# or `--env-file`. Only the web container publishes a port; everything else
+# stays on the internal network.
+#
+#   docker compose up -d --build            # full stack on http://localhost:8080
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d postgres redis
+#                                            # local infra only, for `pnpm dev`
+
+name: ourzo
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  postgres:
+    <<: *hardening
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ourzo}
+      POSTGRES_USER: ${POSTGRES_USER:-ourzo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    mem_limit: 512m
+
+  redis:
+    <<: *hardening
+    image: redis:7-alpine
+    # No password: Redis is reachable only on the internal Compose network
+    # (compose.dev.yaml publishes it on 127.0.0.1 only). Never publish it publicly.
+    command: ["redis-server", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    mem_limit: 256m
+
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migrate
+    image: ${MIGRATE_IMAGE:-ourzo-api-migrate:local}
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ourzo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ourzo}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *hardening
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: runner
+    image: ${API_IMAGE:-ourzo-api:local}
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      # One trusted hop: the web container's nginx. Add one per extra proxy/LB
+      # in front of it (e.g. 2 behind a TLS-terminating load balancer).
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-ourzo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ourzo}?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}
+      JWT_ACCESS_TOKEN_EXPIRY: ${JWT_ACCESS_TOKEN_EXPIRY:-15m}
+      JWT_REFRESH_TOKEN_EXPIRY: ${JWT_REFRESH_TOKEN_EXPIRY:-7d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      ALLOW_ORIGIN: ${ALLOW_ORIGIN:-http://localhost:8080}
+      WEB_APP_URL: ${WEB_APP_URL:-http://localhost:8080}
+      RATE_LIMIT_AUTH_MAX: ${RATE_LIMIT_AUTH_MAX:-10}
+      RATE_LIMIT_AUTH_WINDOW_MS: ${RATE_LIMIT_AUTH_WINDOW_MS:-60000}
+      RATE_LIMIT_DEFAULT_MAX: ${RATE_LIMIT_DEFAULT_MAX:-300}
+      RATE_LIMIT_API_KEY_MAX: ${RATE_LIMIT_API_KEY_MAX:-120}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    mem_limit: 512m
+
+  web:
+    <<: *hardening
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    image: ${WEB_IMAGE:-ourzo-web:local}
+    read_only: true
+    tmpfs:
+      # Writable scratch space for the unprivileged nginx user (uid/gid 101):
+      # rendered config from the template, pid file and proxy temp files.
+      - /tmp:uid=101,gid=101
+      - /etc/nginx/conf.d:uid=101,gid=101
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 128m
+
+volumes:
+  postgres_data:

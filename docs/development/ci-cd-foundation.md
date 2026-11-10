@@ -17,61 +17,40 @@ The goal is to establish:
 
 ### Decision
 
-Use:
+Use **GitHub Actions** for CI and **GitHub Container Registry (GHCR)** for images.
 
-```text
-GitHub Actions
-```
+- Native integration with the GitHub repository; no extra infrastructure.
+- `GITHUB_TOKEN` is enough to publish images, so no long-lived registry secrets are needed.
+- A Husky pre-commit hook still runs lint-staged locally (ESLint + Prettier on API files, oxlint on web files).
 
-Reason:
-
-- Native integration with GitHub repositories.
-- Suitable for MVP development.
-- Supports automated testing and deployment workflows.
-- Reduces infrastructure complexity.
+Deployment automation is introduced when a hosting target is chosen (see `docs/deployment.md`).
 
 ---
 
-## Current CI/CD Scope
+## Workflows
 
-For the MVP, CI focuses on:
+| Workflow | File | Triggers | Does |
+|---|---|---|---|
+| CI | `.github/workflows/ci.yml` | pull requests, pushes to `develop` (code changes only), manual, `workflow_call` | format, lint, type check, tests + coverage gate, build, Compose validation, Docker image build (not pushed) |
+| Docker Publish | `.github/workflows/docker-publish.yml` | pushes to `main`, `v*.*.*` tags, manual | runs CI first, then builds and pushes `ourzo-api`, `ourzo-api-migrate` and `ourzo-web` to GHCR |
 
-```text
-Code Validation
+Pushes to `main` run CI only through Docker Publish, so a commit is never validated twice, and no image is published unless CI passed for that commit.
 
-↓
-
-Testing
-
-↓
-
-Build Verification
-```
-
-Deployment automation is introduced when deployment environments are finalized.
-
----
-
-## CI Workflow Location
-
-GitHub Actions workflows are stored at:
+### CI job graph
 
 ```text
-.github/
-
-└── workflows/
+quality (format, lint, type check) ─┐
+test (unit + e2e + web, coverage)  ─┼─► docker (api, web images; compose config)
+build (pnpm build)                 ─┘
 ```
 
-Example:
+### Engineering rules
 
-```text
-.github/
-
-└── workflows/
-
-    ├── pull-request.yml
-    └── main.yml
-```
+- Third-party actions are pinned to full commit SHAs, with the release tag in a comment. Update them deliberately (e.g. with Dependabot).
+- Least-privilege permissions: `contents: read` everywhere; `packages: write` only on the publish job.
+- Concurrency: superseded pull request runs are cancelled; publish runs are queued, never cancelled.
+- Docker builds use Buildx with the GitHub Actions cache (scope `ourzo-api` / `ourzo-web`).
+- pnpm's version comes from `packageManager` in the root `package.json`.
 
 ---
 
@@ -84,11 +63,11 @@ Validate changes before merging into the main branch.
 Workflow:
 
 ```text
-Developer creates PR
+Developer opens PR
 
 ↓
 
-GitHub Actions starts
+GitHub Actions CI starts
 
 ↓
 
@@ -165,7 +144,7 @@ Purpose: Validate application behaviour.
 
 In CI, `pnpm test` runs:
 - API unit tests (Jest)
-- API e2e suites (supertest, run serially against the `ourzo_test` service database via `TEST_DATABASE_URL`)
+- API e2e suites (supertest, run serially against the `ourzo_test` service-container database via `TEST_DATABASE_URL`)
 - web tests (Vitest + jsdom)
 
 `pnpm --filter ourzo-api test:cov` then fails the job if line coverage of `src/**/*.service.ts` drops below 70%. Turbo passes `TEST_DATABASE_URL`, `REDIS_HOST` and `REDIS_PORT` through to the test task.
@@ -183,18 +162,6 @@ pnpm build
 Purpose: Ensure applications compile successfully.
 
 The root scripts `lint`, `test`, `build` and `format:check` all run through Turborepo. CI runs `prisma generate` before lint and build, because type-aware lint and `nest build` need the generated client.
-
-### Docker Image (API)
-
-The image is built from the **repository root** so pnpm workspace files and the lockfile are available:
-
-```bash
-docker build -f apps/api/Dockerfile .
-```
-
-- CI (`docker/build-push-action`) and both compose files use `context: .` with `apps/api/Dockerfile`.
-- The runtime image runs `node dist/main.js` from `/app/apps/api`.
-- The container HEALTHCHECK probes `GET /health`.
 
 ---
 
@@ -261,7 +228,7 @@ Purpose: Bug corrections.
 
 Before merging into `develop`, required:
 
-- Passing CI checks.
+- Passing CI checks (`quality`, `test`, `build`, `docker`).
 - Code review.
 - No failing tests.
 
@@ -293,11 +260,11 @@ CI validation
 
 ↓
 
-Build Docker image
+Publish images to GHCR
 
 ↓
 
-Deploy backend container
+Run ourzo-api-migrate, then deploy ourzo-api and ourzo-web
 
 ↓
 
@@ -315,14 +282,16 @@ Connect managed PostgreSQL
 Planned approach:
 
 ```text
-Static Hosting
+Container (`ourzo-web`: nginx serving the Vite build and proxying /api to the API)
 ```
+
+Static hosting is still possible if the host serves the API on the same site (ADR-010).
 
 Requirements:
 
 - Build React application.
 - Serve generated assets.
-- Configure API environment variable.
+- Configure API environment variable (empty in the container image: same origin).
 
 Build command:
 
@@ -348,7 +317,8 @@ Container Platform
 
 Requirements:
 
-- Docker image.
+- `ourzo-api` image from GHCR.
+- `ourzo-api-migrate` run once per release, before the new API starts.
 - Environment variables.
 - Database connection.
 - Health checks.
@@ -379,7 +349,7 @@ pnpm prisma migrate deploy
 
 ## CI Environment
 
-CI runs using:
+CI runs on `ubuntu-latest` using:
 
 ```text
 Node.js LTS
@@ -403,12 +373,11 @@ PostgreSQL test database
 
 Possible future additions:
 
-- Automated deployments.
-- Docker image publishing.
-- Database migration automation.
+- Deployment workflow (`deploy.yml`) once a hosting target exists.
+- Dependabot for action SHAs and base images.
+- Image vulnerability scanning.
 - Preview environments.
-- Security scanning.
-- Dependency updates.
+- Smaller API image (drop the Prisma CLI that pnpm installs as an optional peer of `@prisma/client`).
 
 These are not required for the MVP.
 

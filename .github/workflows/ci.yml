@@ -1,53 +1,72 @@
 name: CI
 
+# Pull requests and the integration branch. Pushes to main and version tags run
+# this same workflow through docker-publish.yml (workflow_call), so it is never
+# executed twice for one commit.
 on:
-  push:
-    branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+  push:
+    branches: [develop]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  # github.workflow is the caller's name when run via workflow_call, so this
+  # group never collides with the caller's own concurrency group.
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   NODE_VERSION: '22'
-  PNPM_VERSION: '10'
-  DATABASE_URL: postgresql://ourzo:test_password@localhost:5432/ourzo_test?schema=public
-  REDIS_HOST: localhost
-  REDIS_PORT: 6379
+  # prisma.config.ts reads DATABASE_URL; `prisma generate` never connects.
+  DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
 
 jobs:
-  lint-and-format:
-    name: Lint & Format
+  quality:
+    name: Format, lint & type check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+      - name: Set up pnpm (version from packageManager)
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate Prisma Client
-        run: pnpm prisma:generate
-        working-directory: ./apps/api
+      - name: Generate Prisma client
+        run: pnpm --filter ourzo-api prisma:generate
 
-      - name: Run lint
-        run: pnpm lint
-
-      - name: Run format check
+      - name: Check formatting
         run: pnpm format:check
 
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check (API)
+        run: pnpm --filter ourzo-api exec tsc --noEmit -p tsconfig.json
+
+      - name: Type check (web)
+        run: pnpm --filter web exec tsc -b
+
   test:
-    name: Test
+    name: Tests (unit + e2e + web)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -71,91 +90,101 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+    env:
+      # Disposable CI database; the e2e harness refuses names not ending in _test.
+      TEST_DATABASE_URL: postgresql://ourzo:test_password@localhost:5432/ourzo_test
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+      - name: Set up pnpm (version from packageManager)
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate Prisma Client
-        run: pnpm prisma:generate
-        working-directory: ./apps/api
-        env:
-          DATABASE_URL: ${{ env.DATABASE_URL }}
+      - name: Generate Prisma client
+        run: pnpm --filter ourzo-api prisma:generate
 
-      - name: Run tests (API unit + e2e, web)
+      - name: Run tests
         run: pnpm test
-        env:
-          TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
-          REDIS_HOST: ${{ env.REDIS_HOST }}
-          REDIS_PORT: ${{ env.REDIS_PORT }}
 
       - name: Enforce API service coverage (>= 70% lines)
         run: pnpm --filter ourzo-api test:cov
-        env:
-          TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
-          REDIS_HOST: ${{ env.REDIS_HOST }}
-          REDIS_PORT: ${{ env.REDIS_PORT }}
 
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint-and-format, test]
+    timeout-minutes: 15
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+      - name: Set up pnpm (version from packageManager)
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate Prisma Client
-        run: pnpm prisma:generate
-        working-directory: ./apps/api
+      - name: Generate Prisma client
+        run: pnpm --filter ourzo-api prisma:generate
 
-      - name: Build all packages
+      - name: Build all apps
         run: pnpm build
 
-  docker-build:
-    name: Docker Build (API)
+  docker:
+    name: Docker build (${{ matrix.image }})
     runs-on: ubuntu-latest
-    needs: build
+    timeout-minutes: 20
+    needs: [quality, test, build]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api
+            dockerfile: apps/api/Dockerfile
+            target: runner
+          - image: web
+            dockerfile: apps/web/Dockerfile
+            target: runner
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validate Compose configuration
+        if: matrix.image == 'api'
+        env:
+          POSTGRES_PASSWORD: ci-placeholder
+          JWT_SECRET: ci-placeholder-ci-placeholder-ci-placeholder
+          JWT_REFRESH_SECRET: ci-placeholder-ci-placeholder-ci-placeholder
+        run: |
+          docker compose -f compose.yaml config --quiet
+          docker compose -f compose.yaml -f compose.dev.yaml config --quiet
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Build API Docker image
-        uses: docker/build-push-action@v5
+      - name: Build image (not pushed)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
-          file: apps/api/Dockerfile
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
           push: false
-          tags: ourzo-api:${{ github.sha }}
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ourzo-${{ matrix.image }}:ci
+          cache-from: type=gha,scope=ourzo-${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=ourzo-${{ matrix.image }}

@@ -61,7 +61,9 @@ The goal is to document the selected technologies, their responsibilities, and t
 | Category | Technology |
 |---|---|
 | Containerization | Docker |
-| Local Backend Environment | Docker Compose |
+| Local Backend Environment | Docker Compose (or locally installed PostgreSQL and Redis) |
+| CI/CD | GitHub Actions |
+| Image Registry | GitHub Container Registry (GHCR) |
 | Cache / Future Jobs | Redis |
 | Frontend Deployment | Static Hosting |
 | Backend Deployment | Container Platform |
@@ -438,6 +440,7 @@ Infrastructure
 
 Docker
 Docker Compose
+GitHub Actions
 Redis
 Managed PostgreSQL
 

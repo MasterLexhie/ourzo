@@ -1,55 +1,66 @@
-# Build context: repository root
-#   docker build -f apps/api/Dockerfile .
+# syntax=docker/dockerfile:1.7
+#
+# Ourzo API image. Build context is the repository root:
+#   docker build -f apps/api/Dockerfile --target runner -t ourzo-api .
+#
+# Targets:
+#   runner  - production API (default, last stage)
+#   migrate - one-shot `prisma migrate deploy` job (keeps the Prisma CLI)
 
-# ---------- Builder ----------
-FROM node:22-alpine AS builder
+ARG NODE_IMAGE=node:22-alpine
 
+# ---------- Base: Node + pinned pnpm ----------
+FROM ${NODE_IMAGE} AS base
+ENV PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH \
+    COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+RUN corepack enable && corepack prepare pnpm@10.10.0 --activate
 WORKDIR /app
 
-RUN corepack enable pnpm
-
-# Workspace manifests first for better layer caching
+# ---------- Dependencies (cached on manifest + lockfile changes only) ----------
+FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json ./apps/api/package.json
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --filter ourzo-api... --ignore-scripts
 
-# Install only the API and its dependencies (workspace-aware)
-RUN pnpm install --frozen-lockfile --filter ourzo-api...
-
+# ---------- Build ----------
+FROM deps AS build
 COPY apps/api ./apps/api
+WORKDIR /app/apps/api
+# prisma.config.ts reads DATABASE_URL, but `generate` never connects:
+# a placeholder is enough here; the real value is injected at runtime.
+ENV DATABASE_URL=postgresql://build:build@localhost:5432/build
+RUN pnpm prisma:generate && pnpm build
 
-# prisma.config.ts reads DATABASE_URL; generate does not connect, so a
-# placeholder is enough at build time (the real value is injected at runtime).
-RUN DATABASE_URL="postgresql://build:build@localhost:5432/build" \
-    pnpm --filter ourzo-api prisma:generate
+# ---------- Migrate job (dev deps kept for the Prisma CLI) ----------
+FROM build AS migrate
+ENV DATABASE_URL= \
+    NODE_ENV=production
+RUN chown -R node:node /app/apps/api
+USER node
+CMD ["pnpm", "prisma:migrate:deploy"]
 
-RUN pnpm --filter ourzo-api build
+# ---------- Production dependencies only ----------
+FROM build AS prod-deps
+# Pass the workspace root explicitly: from apps/api pnpm would only see its own package.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    cd /app && pnpm --filter ourzo-api deploy --prod --legacy --ignore-scripts /prod/api
+# The generated Prisma client lives next to @prisma/client, so generate it
+# into the slim tree too, using the CLI from the build stage.
+RUN cp -r /app/apps/api/prisma /prod/api/prisma && \
+    /app/apps/api/node_modules/.bin/prisma generate --schema /prod/api/prisma/schema.prisma
 
 # ---------- Runtime ----------
-FROM node:22-alpine AS runner
-
+FROM ${NODE_IMAGE} AS runner
+ENV NODE_ENV=production \
+    PORT=3000
 WORKDIR /app
-
-ENV NODE_ENV=production
-
-RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
-
-# pnpm keeps packages in the root store and symlinks them into
-# apps/api/node_modules, so both trees are copied to keep links intact.
-COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nestjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/node_modules ./apps/api/node_modules
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/package.json
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/prisma ./apps/api/prisma
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/prisma.config.ts ./apps/api/prisma.config.ts
-
-WORKDIR /app/apps/api
-
-USER nestjs
-
+COPY --from=prod-deps --chown=node:node /prod/api/node_modules ./node_modules
+COPY --from=prod-deps --chown=node:node /prod/api/package.json ./package.json
+COPY --from=build --chown=node:node /app/apps/api/dist ./dist
+USER node
 EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
-
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1
 CMD ["node", "dist/main.js"]

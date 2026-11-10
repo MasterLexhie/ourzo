@@ -18,23 +18,42 @@ Ourzo is a lightweight multi-tenant SaaS workspace for startups and SMEs to orga
 | `apps/api` | NestJS REST API: business logic, auth, tenant isolation, Prisma/PostgreSQL |
 | `apps/web` | React + Vite SPA (TanStack Query, Zustand, shadcn/ui) |
 | `docs/` | Product, architecture, database and development documentation, ADRs |
-| `docker-compose.*.yml` | Local (dev) and production container definitions |
-| `.github/workflows/ci.yml` | Lint, format, tests (unit + e2e + web), build, Docker image |
+| `compose.yaml`, `compose.dev.yaml` | Full stack (Postgres, Redis, migrations, API, web) and local-dev overrides |
+| `apps/*/Dockerfile` | API and web images (see `docs/deployment.md`) |
+| `.github/workflows/` | CI (format, lint, type check, tests, build, Docker build) and GHCR publishing |
 
 ## Prerequisites
 
 - Node.js 22
 - pnpm 10.10 (`corepack enable`): the only supported package manager
-- Docker with Docker Compose, for PostgreSQL and Redis
+- Docker with Docker Compose (recommended), **or** PostgreSQL 16 and Redis 7 installed locally
 
-## Getting started
+## Quick start with Docker
+
+Requires only Docker Desktop, or Docker Engine 24+ with the Compose v2 plugin (`docker compose`, not `docker-compose`). Node and pnpm are not needed.
+
+```bash
+cp .env.example .env            # development values; never use them in production
+docker compose up -d --build    # postgres, redis, migrations, api, web
+# open http://localhost:8080 and register an account
+```
+
+- The first build takes a few minutes; later starts take seconds.
+- Port 8080 already in use? Set `WEB_PORT` in `.env`.
+- Stop with `docker compose down`; add `-v` to also delete the database.
+
+See `docs/deployment.md` for logs, rebuilds, production images and the CI/CD workflows.
+
+## Getting started (apps on the host)
 
 ```bash
 # 1. Install dependencies (also installs the git pre-commit hook)
 pnpm install
 
-# 2. Start PostgreSQL and Redis
-docker compose -f docker-compose.dev.yml up -d postgres redis
+# 2. Start PostgreSQL (ourzo_dev + ourzo_test) and Redis in containers
+cp .env.example .env
+docker compose -f compose.yaml -f compose.dev.yaml up -d postgres redis
+#    (or use local installs and run `createdb ourzo_dev`)
 
 # 3. Configure environment variables
 cp apps/api/.env.example apps/api/.env
@@ -67,12 +86,14 @@ API docs are served by Swagger at <http://localhost:3000/api/docs>. The health e
 The API e2e suites (tenant-isolation matrix, RBAC matrix, API keys, rate limiting, cookie auth, workflows) run against a **dedicated, disposable** database. They read `TEST_DATABASE_URL`, refuse any database whose name does not end in `_test`, and truncate it between suites.
 
 ```bash
-docker compose -f docker-compose.dev.yml exec postgres createdb -U ourzo ourzo_test
+# compose.dev.yaml creates ourzo_test automatically; with local installs: createdb ourzo_test
 export TEST_DATABASE_URL=postgresql://ourzo:dev_password@localhost:5432/ourzo_test
 pnpm test
 ```
 
 Never point `TEST_DATABASE_URL` at a development or production database.
+
+CI runs the same suites on every pull request (`.github/workflows/ci.yml`).
 
 ## Contributing
 

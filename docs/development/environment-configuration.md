@@ -159,6 +159,10 @@ REDIS_HOST=
 
 REDIS_PORT=
 
+ALLOW_ORIGIN=
+
+TRUST_PROXY=
+
 RATE_LIMIT_AUTH_MAX=
 RATE_LIMIT_AUTH_WINDOW_MS=
 RATE_LIMIT_DEFAULT_MAX=
@@ -180,6 +184,8 @@ RATE_LIMIT_WINDOW_MS=
 | JWT_REFRESH_SECRET | Refresh token signing key |
 | REDIS_HOST | Redis connection host |
 | REDIS_PORT | Redis connection port |
+| ALLOW_ORIGIN | Exact CORS origin(s), comma-separated (default `http://localhost:5173`) |
+| TRUST_PROXY | Number of trusted reverse-proxy hops for client-IP detection (rate limiting). `1` behind the web container's nginx; leave unset when the API is exposed directly |
 | RATE_LIMIT_AUTH_MAX | Max register/login/refresh requests per IP per auth window (default 10) |
 | RATE_LIMIT_AUTH_WINDOW_MS | Auth rate-limit window in ms (default 60000) |
 | RATE_LIMIT_DEFAULT_MAX | Max authenticated requests per user per window (default 300) |
@@ -216,7 +222,7 @@ VITE_API_URL=
 
 | Variable | Purpose |
 |---|---|
-| VITE_API_URL | Backend API endpoint |
+| VITE_API_URL | Backend API endpoint. Build-time only. Empty in the web Docker image, where nginx proxies `/api` on the same origin |
 
 Example:
 
@@ -243,6 +249,7 @@ Secrets are managed externally.
 Examples:
 
 - Container platform secrets.
+- A root env file passed to `docker compose --env-file` (stored outside the repo).
 - Managed hosting environment variables.
 - Cloud secret managers.
 
@@ -325,7 +332,7 @@ New developer setup:
 
 ↓
 
-5. Start Docker services
+5. Start PostgreSQL and Redis (docker compose -f compose.yaml -f compose.dev.yaml up -d postgres redis)
 
 ↓
 

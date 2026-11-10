@@ -43,11 +43,15 @@ ourzo/
 ├── docs/
 │
 ├── infrastructure/
+│   └── docker/postgres-init/
+│
+├── .github/workflows/
 │
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── turbo.json
-├── docker-compose.yml
+├── compose.yaml
+├── compose.dev.yaml
 ├── pnpm-lock.yaml
 └── README.md
 ```
@@ -153,26 +157,6 @@ docs/
 
 ---
 
-## Infrastructure
-
-Location:
-
-    ```text
-infrastructure/
-```
-
-Purpose: Contains infrastructure-related configuration.
-
-    Structure:
-
-```text
-infrastructure/
-
-├── docker/
-└── github-actions/
-```
-
----
 
 ## Backend Ownership
 
